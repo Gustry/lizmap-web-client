@@ -1,6 +1,10 @@
 [![logo](icon.png "3Liz")][3liz]Lizmap Web Application 3.5.0-pre
 ------------------------------------------------------------------
 
+![Server](https://github.com/3liz/lizmap-plugin/workflows/Server%20%F0%9F%8E%B3/badge.svg)
+![Desktop](https://github.com/3liz/lizmap-plugin/workflows/Desktop%20%F0%9F%8E%B3/badge.svg)
+![Lint](https://github.com/3liz/lizmap-plugin/workflows/Lint%20%F0%9F%8E%B3/badge.svg)
+
 Lizmap web application, by 3LIZ.
 
     begin       : 2011-11-01
