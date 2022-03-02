@@ -5,7 +5,7 @@
  *
  * @see      http://3liz.com
  *
- * @license    All rights reserved
+ * @license    All rights reserved by bob
  */
 class defaultCtrl extends jController
 {
