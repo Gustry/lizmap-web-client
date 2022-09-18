@@ -37,6 +37,11 @@ lizmapServerPlugin="1.1.1"
 ; 3 versions behind the current version of LWC
 lizmapWebClientTargetVersion=30300
 
+[qgis]
+; If this parameter is enabled, a QGIS project made with a higher version than QGIS server, the project won't be shown on
+; the landing page. Otherwise, only an error will be displayed in the administration interface
+qgisDesktopHigherVersionCheck=on
+
 [lizmap]
 ; CSP header for the map interface
 ; Exemple value: "default-src 'self' http: https:;connect-src 'self' http: https:;script-src http: https: 'unsafe-inline' 'unsafe-eval'; style-src http: https: 'unsafe-inline';object-src 'none';font-src https:;base-uri 'self';form-action 'self' http: https:;img-src http: https: data: blob:;frame-ancestors http: https:"

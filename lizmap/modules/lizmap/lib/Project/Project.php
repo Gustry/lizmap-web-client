@@ -2134,6 +2134,14 @@ class Project
             return true;
         }
 
+        if (\jApp::config()->qgis['qgisDesktopHigherVersionCheck']) {
+            $server = new \Lizmap\Server\Server();
+            $currentQgisVersion = str_replace('.', '', $server->getQgisServerVersion());
+            if ($this->getQgisProjectVersion() > $currentQgisVersion) {
+                return true;
+            }
+        }
+
         return false;
     }
 
