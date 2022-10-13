@@ -47,6 +47,7 @@ services:
       - "../:/srv/lzm/"
       - ./docker-conf/pg_service.conf:/srv/etc/pg_service.conf
       - ./docker-conf/phpfpm/admin.conf:/srv/etc/admin.conf
+      - ./docker-conf/lizmap-acl.sh:/srv/etc/lizmap-acl.sh
     depends_on:
       - pgsql
       - redis

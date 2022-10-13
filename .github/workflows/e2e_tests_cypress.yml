@@ -57,6 +57,9 @@ jobs:
       - name: Load SQL data
         run: cd tests/qgis-projects/tests && ./load_sql.sh
 
+      - name: Set Lizmap ACL
+        run: cd tests && ./lizmap-ctl project-acl
+
       # Install NPM dependencies, cache them correctly
       # and run all Cypress tests
       - name: Cypress run

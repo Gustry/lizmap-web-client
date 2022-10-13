@@ -27,6 +27,7 @@ if [ "$COMMAND" == "" ]; then
     echo " - install,  composer-install, composer-update"
     echo " - psql, redis-cli, shell, shell-root, shell-pgsql, shell-nginx"
     echo " - phpstan, unit-tests, ldap-users"
+    echo " - project-acl"
     exit 1;
 fi
 
@@ -109,6 +110,9 @@ case $COMMAND in
       ;;
     ldap-users | ldapusers)
        docker exec -it lizmap${LZMBRANCH}_test_ldap /bin/ctl.sh showusers
+       ;;
+    project-acl)
+       docker exec -it lizmap${LZMBRANCH}_test_php /srv/etc/lizmap-acl.sh
        ;;
     psql | pgsql)
        docker exec -it --user postgres -e PGPASSWORD="lizmap1234!" lizmap${LZMBRANCH}_test_pgsql psql --username=lizmap lizmap

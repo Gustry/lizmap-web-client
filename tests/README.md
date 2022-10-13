@@ -47,10 +47,11 @@ Then:
 ```bash
 ./run-docker
 ./lizmap-ctl install
+./lizmap-ctl project-acl
 ./qgis-projects/tests/load_sql.sh # to populate postgreSQL database with testing data
 ```
 
-Then, in your browser, go to `http://localhost:8130/`. (see below to change the port)
+Then, in your browser, go to http://localhost:8130/. (see below to change the port)
 
 Optionally, you can set `lizmap.local` into your `/etc/hosts`:
 
