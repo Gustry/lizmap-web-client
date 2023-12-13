@@ -76,11 +76,11 @@ jobs:
           make env
           cat .env
 
-#       # For testing only
-#      - name: Update projects
-#        run: |
-#          make upgrade-projects
-#          git status
+       # For testing only
+      - name: Update projects
+        run: |
+          make upgrade-projects
+          git status
 
       - name: Install QGIS server plugins
         run: make build-plugins
