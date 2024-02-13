@@ -208,6 +208,10 @@ saas_deploy_snap:
 saas_release: check-release
 	saas_release_lizmap stable $(SAAS_LIZMAP_VERSION) $(GENERIC_PACKAGE_PATH)
 
+php-doc:
+	composer update --working-dir=tests/units --prefer-dist --no-ansi --no-interaction --ignore-platform-reqs --no-dev --no-suggest --no-progress
+	cd tests/units/ && php vendor/bin/phpdoc run --config=../../docs/phpdoc.dist.xml
+
 js-doc:
 	rm -rf docs/js
 	npx jsdoc -c docs/jsdoc.json
