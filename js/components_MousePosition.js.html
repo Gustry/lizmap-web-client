@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: components/MousePosition.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: components/MousePosition.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module components/MousePosition.js
+ * @name MousePosition
+ * @copyright 2023 3Liz
+ * @author BOISTEAULT Nicolas
+ * @license MPL-2.0
+ */
+
+import { mainLizmap } from '../modules/Globals.js';
+import { html, render } from 'lit-html';
+
+import { transform, get as getProjection } from 'ol/proj.js';
+
+import { forward } from '../dependencies/mgrs.js';
+
+import MGRS from '../modules/MGRS.js';
+
+/**
+ * @class
+ * @name MousePosition
+ * @augments HTMLElement
+ */
+export default class MousePosition extends HTMLElement {
+    constructor() {
+        super();
+
+        this._numDigits = 0;
+
+        // 'm', 'ft', 'us-ft','degrees', 'dm', 'dms'
+        this._displayUnit = 'm';
+
+        // 'm', 'ft', 'us-ft', 'degrees'
+        this._qgisProjectProjectionUnits;
+
+        // lon/lat in map projection
+        this._longitude;
+        this._latitude;
+
+        // lon/lat in inputs (written when mouse move or by user)
+        this._lonInput;
+        this._latInput;
+    }
+
+    // Don't add line break between &lt;input>s or it adds a space in UI
+    mainTemplate(lon, lat){
+        return html`
+            &lt;div class="mouse-position">
+                &lt;div class="editable-position ${['dm', 'dms', 'mgrs'].includes(this._displayUnit) ? 'hide' : ''}">
+                    &lt;input type="number" step="any" placeholder="longitude" @input=${(event) => this._lonInput = parseFloat(event.target.value)} @keydown=${(event) => { if (event.key === 'Enter') { this._centerToCoords(); } }} .value=${isNaN(lon) ? 0 : lon}>&lt;input type="number" step="any" placeholder="latitude" @input=${(event) => this._latInput = parseFloat(event.target.value)} @keydown=${(event) => { if (event.key === 'Enter') { this._centerToCoords(); } }} .value=${isNaN(lat) ? 0 : lat}>
+                &lt;/div>
+                &lt;div class="readonly-position ${['dm', 'dms', 'mgrs'].includes(this._displayUnit) ? '' : 'hide'}">
+                    &lt;span>${lon}&lt;/span>
+                    &lt;span>${lat}&lt;/span>
+                &lt;/div>
+                &lt;button class="btn btn-mini" title="${lizDict['mouseposition.removeCenterPoint']}" @click=${() => this._removeCenterPoint()}>&lt;i class="icon-refresh">&lt;/i>&lt;/button>
+            &lt;/div>
+            &lt;div class="coords-unit">
+                &lt;select title="${lizDict['mouseposition.select']}" @change=${(event) => { this.displayUnit = event.target.value }}>
+                    ${this._qgisProjectProjectionUnits === 'm' ? html`
+                    &lt;option selected value="m">${lizDict['mouseposition.units.m']}&lt;/option>` : ''}
+                    ${ ['ft', 'us-ft'].includes(this._qgisProjectProjectionUnits) ? html`
+                    &lt;option selected value="f">${lizDict['mouseposition.units.f']}&lt;/option>` : ''}
+
+                    &lt;option value="degrees">${lizDict['mouseposition.units.d']}&lt;/option>
+                    &lt;option value="dm">${lizDict['mouseposition.units.dm']}&lt;/option>
+                    &lt;option value="dms">${lizDict['mouseposition.units.dms']}&lt;/option>
+                    &lt;option value="mgrs">MGRS&lt;/option>
+                &lt;/select>
+            &lt;/div>`;
+    }
+
+    _centerToCoords() {
+        if (this._lonInput &amp;&amp; this._latInput) {
+            let lonlatInputInMapProj;
+
+            // If map projection is not yet in degrees => reproject to EPSG:4326
+            if (this._displayUnit === 'degrees' &amp;&amp; mainLizmap.lizmap3.map.projection.getUnits() !== 'degrees') {
+                lonlatInputInMapProj = transform([this._lonInput, this._latInput], 'EPSG:4326', mainLizmap.projection);
+            } else {
+                lonlatInputInMapProj = transform([this._lonInput, this._latInput], mainLizmap.qgisProjectProjection, mainLizmap.projection);
+            }
+
+            mainLizmap.center = lonlatInputInMapProj;
+            // Display point
+            const featureAsWKT = `POINT(${lonlatInputInMapProj[0]} ${lonlatInputInMapProj[1]})`;
+            mainLizmap.map.setHighlightFeatures(featureAsWKT,"wkt", mainLizmap.projection);
+        }
+    }
+
+    _removeCenterPoint() {
+        mainLizmap.map.clearHighlightFeatures();
+    }
+
+    /**
+     * @param {string} unit
+     */
+    set displayUnit(unit){
+        unit === 'm' ? this._numDigits = 0 : this._numDigits = 5;
+        this._displayUnit = unit;
+
+        if (this._longitude &amp;&amp; this._latitude){
+            this.redraw(this._longitude, this._latitude);
+        }
+
+        if(unit === 'mgrs'){
+            if(!this._MGRS){
+                this._MGRS = new MGRS({
+                    showLabels: true,
+                    wrapX: false,
+                });
+            }
+            mainLizmap.map.addLayer(this._MGRS);
+
+            // mainLizmap.newOlMap = true;
+        }else{
+            if(this._MGRS){
+                mainLizmap.map.removeLayer(this._MGRS);
+            }
+            // mainLizmap.newOlMap = false;
+        }
+    }
+
+    // Callback to map's mousemove event
+    _mousemove(evt){
+        if (evt == null) {
+            return;
+        }else{
+            let lon,lat;
+            // OL2
+            if(evt.xy){
+                const lonlat = mainLizmap.lizmap3.map.getLonLatFromPixel(evt.xy);
+                if (lonlat !== null) {
+                    lon = lonlat.lon;
+                    lat = lonlat.lat;
+                }
+            } else if (evt.pixel){ //OL6
+                [lon, lat ] = mainLizmap.map.getCoordinateFromPixel(evt.pixel);
+            }
+
+            if(lon &amp;&amp; lat){
+                this._longitude = lon;
+                this._latitude = lat;
+
+                this.redraw(lon, lat);
+            }
+        }
+    }
+
+    redraw(lon, lat) {
+        let lonLatToDisplay = [lon, lat];
+
+        // Display in degree, degree minute, degree minute second or MGRS
+        if (['degrees', 'dm', 'dms', 'mgrs'].includes(this._displayUnit)) {
+            // If map projection is not yet in degrees => reproject to EPSG:4326
+            if (mainLizmap.lizmap3.map.projection.getUnits() !== 'degrees') {
+                lonLatToDisplay = transform(lonLatToDisplay, mainLizmap.projection, 'EPSG:4326');
+            }
+
+            // If in degrees, lon/lat are editable
+            if (this._displayUnit === 'degrees') {
+                render(this.mainTemplate(lonLatToDisplay[0].toFixed(this._numDigits), lonLatToDisplay[1].toFixed(this._numDigits)), this);
+            } else if (this._displayUnit === 'mgrs') {
+                let mgrsCoords = '';
+                try {
+                    mgrsCoords = forward(lonLatToDisplay);
+
+                    mgrsCoords = mgrsCoords.slice(0, -12) + ' ' + mgrsCoords.slice(-12, -10) + ' ' + mgrsCoords.slice(-10, -5) + ' ' + mgrsCoords.slice(-5);
+                } catch (error) {}
+
+                render(this.mainTemplate(mgrsCoords, ''), this);
+            } else {
+                lonLatToDisplay[0] = this.getFormattedLonLat(lonLatToDisplay[0], 'lon', this._displayUnit);
+                lonLatToDisplay[1] = this.getFormattedLonLat(lonLatToDisplay[1], 'lat', this._displayUnit);
+
+                render(this.mainTemplate(lonLatToDisplay[0], lonLatToDisplay[1]), this);
+            }
+        } else {
+            lonLatToDisplay = transform(lonLatToDisplay, mainLizmap.projection, mainLizmap.qgisProjectProjection);
+
+            render(this.mainTemplate(lonLatToDisplay[0].toFixed(this._numDigits), lonLatToDisplay[1].toFixed(this._numDigits)), this);
+        }
+
+        this._lonInput = lonLatToDisplay[0];
+        this._latInput = lonLatToDisplay[1];
+    }
+
+    getFormattedLonLat (coordinate, axis, dmsOption) {
+        if (!dmsOption) {
+            dmsOption = 'dms';    //default to show degree, minutes, seconds
+        }
+
+        coordinate = (coordinate + 540) % 360 - 180; // normalize for sphere being round
+
+        var abscoordinate = Math.abs(coordinate);
+        var coordinatedegrees = Math.floor(abscoordinate);
+
+        var coordinateminutes = (abscoordinate - coordinatedegrees) / (1 / 60);
+        var tempcoordinateminutes = coordinateminutes;
+        coordinateminutes = Math.floor(coordinateminutes);
+        var coordinateseconds = (tempcoordinateminutes - coordinateminutes) / (1 / 60);
+        coordinateseconds = Math.round(coordinateseconds * 10);
+        coordinateseconds /= 10;
+
+        if (coordinateseconds >= 60) {
+            coordinateseconds -= 60;
+            coordinateminutes += 1;
+            if (coordinateminutes >= 60) {
+                coordinateminutes -= 60;
+                coordinatedegrees += 1;
+            }
+        }
+
+        if (coordinatedegrees &lt; 10) {
+            coordinatedegrees = "0" + coordinatedegrees;
+        }
+        var str = coordinatedegrees + "\u00B0";
+
+        if (dmsOption.indexOf('dms') >= 0) {
+            if (coordinateminutes &lt; 10) {
+                coordinateminutes = "0" + coordinateminutes;
+            }
+            str += coordinateminutes + "'";
+
+            if (coordinateseconds &lt; 10) {
+                coordinateseconds = "0" + coordinateseconds;
+            }
+            str += coordinateseconds + '"';
+        } else if (dmsOption.indexOf('dm') >= 0) {
+            coordinateminutes = Math.round(tempcoordinateminutes * 1000);
+            coordinateminutes = coordinateminutes / 1000;
+            if (coordinateminutes &lt; 10) {
+                coordinateminutes = "0" + coordinateminutes;
+            }
+            str += coordinateminutes + "'";
+        }
+
+        if (axis == "lon") {
+            str += coordinate &lt; 0 ? "W" : "E";
+        } else {
+            str += coordinate &lt; 0 ? "S" : "N";
+        }
+        return str;
+    }
+
+    connectedCallback() {
+        // Init variables
+        this._qgisProjectProjectionUnits = getProjection(mainLizmap.qgisProjectProjection).getUnits();
+        this.displayUnit = this._qgisProjectProjectionUnits;
+
+        // Listen to mousemove event
+        // OL2
+        mainLizmap.lizmap3.map.events.register('mousemove', this, this._mousemove);
+        // OL6
+        mainLizmap.map.on('pointermove', (evt) => this._mousemove(evt));
+
+        // First render
+        render(this.mainTemplate(null, null), this);
+    }
+
+    disconnectedCallback() {
+        // OL2
+        mainLizmap.lizmap3.map.events.unregister('mousemove', this, this._mousemove);
+        // OL6
+        mainLizmap.map.un('pointermove', (evt) => this._mousemove(evt));
+    }
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector.html">ActionSelector</a></li><li><a href="module-Atlas.html">Atlas</a></li><li><a href="module-AttributeTable.html">AttributeTable</a></li><li><a href="module-Attribution.html">Attribution</a></li><li><a href="module-BaseLayer.html">BaseLayer</a></li><li><a href="module-BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseObject.html">BaseObject</a></li><li><a href="module-BottomDock.html">BottomDock</a></li><li><a href="module-Config.html">Config</a></li><li><a href="module-Constants.html">Constants</a></li><li><a href="module-Converters.html">Converters</a></li><li><a href="module-Dataviz.html">Dataviz</a></li><li><a href="module-Digitizing.html">Digitizing</a></li><li><a href="module-Draw.html">Draw</a></li><li><a href="module-Edition.html">Edition</a></li><li><a href="module-Enums.html">Enums</a></li><li><a href="module-Errors.html">Errors</a></li><li><a href="module-Extent.html">Extent</a></li><li><a href="module-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-Filter.html">Filter</a></li><li><a href="module-FormFilter.html">FormFilter</a></li><li><a href="module-FullScreen.html">FullScreen</a></li><li><a href="module-Geolocation.html">Geolocation</a></li><li><a href="module-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Index.html">Index</a></li><li><a href="module-Layer.html">Layer</a></li><li><a href="module-LayerState.html">LayerState</a></li><li><a href="module-LayerTree.html">LayerTree</a></li><li><a href="module-LayerTreeState.html">LayerTreeState</a></li><li><a href="module-LayersOrder.html">LayersOrder</a></li><li><a href="module-Legend.html">Legend</a></li><li><a href="module-Locate.html">Locate</a></li><li><a href="module-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.html">MapState</a></li><li><a href="module-Mask.html">Mask</a></li><li><a href="module-Metadata.html">Metadata</a></li><li><a href="module-MousePosition.html">MousePosition</a></li><li><a href="module-Options.html">Options</a></li><li><a href="module-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom.html">PasteGeom</a></li><li><a href="module-Permalink.html">Permalink</a></li><li><a href="module-Popup.html">Popup</a></li><li><a href="module-Print.html">Print</a></li><li><a href="module-PrintTemplate.html">PrintTemplate</a></li><li><a href="module-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom.html">ReverseGeom</a></li><li><a href="module-Scaleline.html">Scaleline</a></li><li><a href="module-Search.html">Search</a></li><li><a href="module-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping.html">Snapping</a></li><li><a href="module-State.html">State</a></li><li><a href="module-Switch%2520layer%2520actions.html">Switch layer actions</a></li><li><a href="module-SymbologyAction.html">SymbologyAction</a></li><li><a href="module-SymbologyState.html">SymbologyState</a></li><li><a href="module-Theme.html">Theme</a></li><li><a href="module-Time%2520manager.html">Time manager</a></li><li><a href="module-TimeManager.html">TimeManager</a></li><li><a href="module-Tools.html">Tools</a></li><li><a href="module-Tooltip.html">Tooltip</a></li><li><a href="module-Treeview.html">Treeview</a></li><li><a href="module-Utils.html">Utils</a></li><li><a href="module-View.html">View</a></li><li><a href="module-WFS.html">WFS</a></li><li><a href="module-WMS.html">WMS</a></li><li><a href="module-maps.html">maps</a></li></ul><h3>Classes</h3><ul><li><a href="EventDispatcher.html">EventDispatcher</a></li><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector-ActionSelector.html">ActionSelector</a></li><li><a href="module-Action-Action.html">Action</a></li><li><a href="module-AttributeTable.AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-AttributeTable.AttributeLayersConfig.html">AttributeLayersConfig</a></li><li><a href="module-AttributeTable-AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-Attribution.AttributionConfig.html">AttributionConfig</a></li><li><a href="module-Attribution-AttributionConfig.html">AttributionConfig</a></li><li><a href="module-BaseLayer.BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseLayer.BaseLayersConfig.html">BaseLayersConfig</a></li><li><a href="module-BaseLayer.BingBaseLayerConfig.html">BingBaseLayerConfig</a></li><li><a href="module-BaseLayer.EmptyBaseLayerConfig.html">EmptyBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmsBaseLayerConfig.html">WmsBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmtsBaseLayerConfig.html">WmtsBaseLayerConfig</a></li><li><a href="module-BaseLayer.XyzBaseLayerConfig.html">XyzBaseLayerConfig</a></li><li><a href="module-BaseLayerState.BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayerState.BaseLayersState.html">BaseLayersState</a></li><li><a href="module-BaseLayerState.BingBaseLayerState.html">BingBaseLayerState</a></li><li><a href="module-BaseLayerState.EmptyBaseLayerState.html">EmptyBaseLayerState</a></li><li><a href="module-BaseLayerState.WmsBaseLayerState.html">WmsBaseLayerState</a></li><li><a href="module-BaseLayerState.WmtsBaseLayerState.html">WmtsBaseLayerState</a></li><li><a href="module-BaseLayerState.XyzBaseLayerState.html">XyzBaseLayerState</a></li><li><a href="module-BaseLayers-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseLayer-BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectConfig.html">BaseObjectConfig</a></li><li><a href="module-BaseObject.BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectLayersConfig.html">BaseObjectLayersConfig</a></li><li><a href="module-BaseObject-BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-Config.Config.html">Config</a></li><li><a href="module-Config-Config.html">Config</a></li><li><a href="module-Dataviz.DatavizElementConfig.html">DatavizElementConfig</a></li><li><a href="module-Dataviz.DatavizLayersConfig.html">DatavizLayersConfig</a></li><li><a href="module-Dataviz.DatavizOptionsConfig.html">DatavizOptionsConfig</a></li><li><a href="module-Dataviz.DatavizPlotConfig.html">DatavizPlotConfig</a></li><li><a href="module-Dataviz.DatavizTraceConfig.html">DatavizTraceConfig</a></li><li><a href="module-Digitizing-Digitizing.html">Digitizing</a></li><li><a href="module-Draw-Draw.html">Draw</a></li><li><a href="module-Edition.EditionCapabilitiesConfig.html">EditionCapabilitiesConfig</a></li><li><a href="module-Edition.EditionLayerConfig.html">EditionLayerConfig</a></li><li><a href="module-Edition.EditionLayersConfig.html">EditionLayersConfig</a></li><li><a href="module-Edition-Edition.html">Edition</a></li><li><a href="module-Errors-ConversionError.html">ConversionError</a></li><li><a href="module-Errors-HttpError.html">HttpError</a></li><li><a href="module-Errors-PropertyRequiredError.html">PropertyRequiredError</a></li><li><a href="module-Errors-ValidationError.html">ValidationError</a></li><li><a href="module-Extent.Extent.html">Extent</a></li><li><a href="module-FeatureStorage-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-FormFilter.FormFilterConfig.html">FormFilterConfig</a></li><li><a href="module-FormFilter.FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FormFilter-FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FullScreen-FullScreen.html">FullScreen</a></li><li><a href="module-GeolocationSurvey-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Geolocation-Geolocation.html">Geolocation</a></li><li><a href="module-Layer.LayerConfig.html">LayerConfig</a></li><li><a href="module-Layer.LayersConfig.html">LayersConfig</a></li><li><a href="module-LayerState.LayerGroupState.html">LayerGroupState</a></li><li><a href="module-LayerState.LayerItemState.html">LayerItemState</a></li><li><a href="module-LayerState.LayerLayerState.html">LayerLayerState</a></li><li><a href="module-LayerState.LayerRasterState.html">LayerRasterState</a></li><li><a href="module-LayerState.LayerVectorState.html">LayerVectorState</a></li><li><a href="module-LayerState.LayersAndGroupsCollection.html">LayersAndGroupsCollection</a></li><li><a href="module-LayerTree.LayerBoundingBoxConfig.html">LayerBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerGeographicBoundingBoxConfig.html">LayerGeographicBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerStyleConfig.html">LayerStyleConfig</a></li><li><a href="module-LayerTree.LayerTreeGroupConfig.html">LayerTreeGroupConfig</a></li><li><a href="module-LayerTree.LayerTreeItemConfig.html">LayerTreeItemConfig</a></li><li><a href="module-LayerTree.LayerTreeLayerConfig.html">LayerTreeLayerConfig</a></li><li><a href="module-LayerTreeState.LayerTreeGroupState.html">LayerTreeGroupState</a></li><li><a href="module-LayerTreeState.LayerTreeItemState.html">LayerTreeItemState</a></li><li><a href="module-LayerTreeState.LayerTreeLayerState.html">LayerTreeLayerState</a></li><li><a href="module-Legend-Legend.html">Legend</a></li><li><a href="module-Locate.LocateByLayerConfig.html">LocateByLayerConfig</a></li><li><a href="module-Locate.LocateLayerConfig.html">LocateLayerConfig</a></li><li><a href="module-MGRS-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.MapGroupState.html">MapGroupState</a></li><li><a href="module-MapLayerState.MapItemState.html">MapItemState</a></li><li><a href="module-MapLayerState.MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.MapState.html">MapState</a></li><li><a href="module-Mask-Mask.html">Mask</a></li><li><a href="module-Metadata.MetadataConfig.html">MetadataConfig</a></li><li><a href="module-MousePosition-MousePosition.html">MousePosition</a></li><li><a href="module-Options.OptionsConfig.html">OptionsConfig</a></li><li><a href="module-OverviewMap-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom-pasteGeom.html">pasteGeom</a></li><li><a href="module-Permalink-Permalink.html">Permalink</a></li><li><a href="module-Popup-Popup.html">Popup</a></li><li><a href="module-PrintTemplate.PrintAtlasConfig.html">PrintAtlasConfig</a></li><li><a href="module-PrintTemplate.PrintLabelConfig.html">PrintLabelConfig</a></li><li><a href="module-PrintTemplate.PrintMapConfig.html">PrintMapConfig</a></li><li><a href="module-PrintTemplate.PrintTemplateConfig.html">PrintTemplateConfig</a></li><li><a href="module-Print-Print.html">Print</a></li><li><a href="module-ProxyEvents-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom-reverseGeom.html">reverseGeom</a></li><li><a href="module-Scaleline-Scaleline.html">Scaleline</a></li><li><a href="module-Search-Search.html">Search</a></li><li><a href="module-SelectionInvert-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping-Snapping.html">Snapping</a></li><li><a href="module-State.State.html">State</a></li><li><a href="module-State-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-State-SelectionTool.html">SelectionTool</a></li><li><a href="module-State-State.html">State</a></li><li><a href="module-SymbologyState.BaseIconSymbology.html">BaseIconSymbology</a></li><li><a href="module-SymbologyState.BaseObjectSymbology.html">BaseObjectSymbology</a></li><li><a href="module-SymbologyState.BaseSymbolsSymbology.html">BaseSymbolsSymbology</a></li><li><a href="module-SymbologyState.LayerGroupSymbology.html">LayerGroupSymbology</a></li><li><a href="module-SymbologyState.LayerIconSymbology.html">LayerIconSymbology</a></li><li><a href="module-SymbologyState.LayerSymbolsSymbology.html">LayerSymbolsSymbology</a></li><li><a href="module-SymbologyState.SymbolIconSymbology.html">SymbolIconSymbology</a></li><li><a href="module-SymbologyState.SymbolRuleSymbology.html">SymbolRuleSymbology</a></li><li><a href="module-Theme.LayerThemeConfig.html">LayerThemeConfig</a></li><li><a href="module-Theme.ThemeConfig.html">ThemeConfig</a></li><li><a href="module-Theme.ThemesConfig.html">ThemesConfig</a></li><li><a href="module-TimeManager.TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-TimeManager.TimeManagerLayersConfig.html">TimeManagerLayersConfig</a></li><li><a href="module-TimeManager-TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayerConfig.html">TooltipLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayersConfig.html">TooltipLayersConfig</a></li><li><a href="module-Treeview-Treeview.html">Treeview</a></li><li><a href="module-Utils-Utils.html">Utils</a></li><li><a href="module-WFS-WFS.html">WFS</a></li><li><a href="module-WMS-WMS.html">WMS</a></li><li><a href="module-maps-map.html">map</a></li></ul><h3>Events</h3><ul><li><a href="module-Action.html#~event:actionResultReceived">actionResultReceived</a></li><li><a href="global.html#event:beforetreecreated">beforetreecreated</a></li><li><a href="global.html#event:layersadded">layersadded</a></li><li><a href="global.html#event:mapcreated">mapcreated</a></li><li><a href="global.html#event:treecreated">treecreated</a></li></ul><h3>Global</h3><ul><li><a href="global.html#addListener">addListener</a></li><li><a href="global.html#dispatch">dispatch</a></li><li><a href="global.html#removeListener">removeListener</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.2</a> on Wed Feb 14 2024 14:50:29 GMT+0100 (Central European Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: modules/Search.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: modules/Search.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module modules/Search.js
+ * @name Search
+ * @copyright 2023 3Liz
+ * @license MPL-2.0
+ */
+
+import { mainLizmap } from '../modules/Globals.js';
+import { transformExtent } from 'ol/proj.js';
+
+/**
+ * @class
+ * @name Search
+ */
+export default class Search {
+
+    constructor() {
+        // Attributes
+        this._config = lizMap.config;
+        this._map = lizMap.map;
+
+        // Add or remove searches!
+        var configOptions = this._config.options;
+        if (('searches' in configOptions) &amp;&amp; (configOptions.searches.length > 0)) {
+            this._addSearches();
+        }
+        else {
+            $('#nominatim-search').remove();
+            $('#lizmap-search, #lizmap-search-close').remove();
+        }
+    }
+
+    /**
+     *
+     */
+    _startExternalSearch() {
+        if ($('#search-query').val().length != 0) {
+            $('#lizmap-search .items li > a').unbind('click');
+            $('#lizmap-search .items').html('&lt;li class="start">&lt;ul>&lt;li>' + lizDict['externalsearch.search'] + '&lt;/li>&lt;/ul>&lt;/li>');
+            $('#lizmap-search, #lizmap-search-close').addClass('open');
+        } else {
+            lizMap.addMessage(lizDict['externalsearch.noquery'], 'info', true).attr('id', 'lizmap-search-message');
+        }
+    }
+
+    /**
+     *
+     */
+    _getHighlightRegEx() {
+        // Format answers to highlight searched keywords
+        var sqval = $('#search-query').val();
+        var sqvals = sqval.split(' ');
+        var sqvalsn = [];
+        var sqrex = '(';
+        for (var i in sqvals) {
+            var sqi = sqvals[i].trim();
+            if (sqi == '') {
+                continue;
+            }
+            sqvalsn.push(sqi);
+            if (sqi != lizMap.cleanName(sqi)) {
+                sqvalsn.push(lizMap.cleanName(sqi));
+            }
+        }
+        sqrex += sqvalsn.join('|');
+        sqrex += ')';
+        return new RegExp(sqrex, "ig");
+    }
+
+    /**
+     * PRIVATE method: addExternalSearch
+     * add external search capability
+     *
+     * Returns:
+     * {Boolean} external search is in the user interface
+     * @param searchConfig
+     */
+    _addSearch(searchConfig) {
+        if (searchConfig.type == 'externalSearch') {
+            return false;
+        }
+        if (!'url' in searchConfig) {
+            return false;
+        }
+
+        // define max extent for searches
+        var wgs84 = new OpenLayers.Projection('EPSG:4326');
+        var extent = new OpenLayers.Bounds(this._map.maxExtent.toArray());
+        extent.transform(this._map.getProjection(), wgs84);
+
+        $('#nominatim-search').submit(() => {
+            this._startExternalSearch();
+
+            // Format answers to highlight searched keywords
+            var labrex = this._getHighlightRegEx();
+            $.get(searchConfig.url
+                , {
+                    "repository": lizUrls.params.repository,
+                    "project": lizUrls.params.project,
+                    "query": $('#search-query').val(),
+                    "bbox": extent.toBBOX()
+                }
+                , (results) => {
+                    var text = '';
+                    var count = 0;
+
+                    // Loop through results
+                    for (var ftsId in results) {
+                        var ftsLayerResult = results[ftsId];
+                        text += '&lt;li>&lt;strong>' + ftsLayerResult.search_name + '&lt;/strong>';
+                        text += '&lt;ul>';
+                        for (var i = 0, len = ftsLayerResult.features.length; i &lt; len; i++) {
+                            var ftsFeat = ftsLayerResult.features[i];
+                            var ftsGeometry = OpenLayers.Geometry.fromWKT(ftsFeat.geometry);
+                            if (ftsLayerResult.srid != 'EPSG:4326') {
+                                ftsGeometry.transform(ftsLayerResult.srid, 'EPSG:4326');
+                            }
+                            var bbox = ftsGeometry.getBounds();
+                            if (extent.intersectsBounds(bbox)) {
+                                var lab = ftsFeat.label.replace(labrex, '&lt;strong class="highlight">$1&lt;/strong>');
+                                text += '&lt;li>&lt;a href="#' + bbox.toBBOX() + '" data="' + ftsGeometry.toString() + '">' + lab + '&lt;/a>&lt;/li>';
+                                count++;
+                            }
+                        }
+                        text += '&lt;/ul>&lt;/li>';
+                    }
+
+                    if (count != 0 &amp;&amp; text != '') {
+                        this._updateExternalSearch(text);
+                    }
+                    else {
+                        this._updateExternalSearch('&lt;li>&lt;strong>' + lizDict['externalsearch.mapdata'] + '&lt;/strong>&lt;ul>&lt;li>' + lizDict['externalsearch.notfound'] + '&lt;/li>&lt;/ul>&lt;/li>');
+                    }
+                }, 'json');
+            return false;
+        });
+
+        return true;
+    }
+
+    /**
+     * PRIVATE method: addExternalSearch
+     * add external search capability
+     *
+     * Returns:
+     * {Boolean} external search is in the user interface
+     * @param searchConfig
+     */
+    _addExternalSearch(searchConfig) {
+        if (searchConfig.type != 'externalSearch') {
+            return false;
+        }
+
+        // define max extent for searches
+        var wgs84 = new OpenLayers.Projection('EPSG:4326');
+        var extent = new OpenLayers.Bounds(this._map.maxExtent.toArray());
+        extent.transform(this._map.getProjection(), wgs84);
+
+        // define external search service
+        var service = null;
+        switch (searchConfig.service) {
+            case 'nominatim':
+                if ('url' in searchConfig) {
+                    service = OpenLayers.Util.urlAppend(searchConfig.url
+                        , new URLSearchParams(lizUrls.params)
+                    );
+                }
+                break;
+            case 'ign':
+                service = 'https://data.geopf.fr/geocodage/completion/';
+                break;
+            case 'google':
+                if (google &amp;&amp; 'maps' in google &amp;&amp; 'Geocoder' in google.maps) {
+                    service = new google.maps.Geocoder();
+                }
+                break;
+        }
+
+        if (service == null) {
+            return false;
+        }
+
+        $('#nominatim-search').submit(() => {
+            this._startExternalSearch();
+
+            // Format answers to highlight searched keywords
+            var labrex = this._getHighlightRegEx();
+            switch (searchConfig.service) {
+                case 'nominatim':
+                    $.get(service
+                        , { "query": $('#search-query').val(), "bbox": extent.toBBOX() }
+                        , data => {
+                            var text = '';
+                            var count = 0;
+                            for (const address of data) {
+                                if (count > 9) {
+                                    return false;
+                                }
+                                if (!address.boundingbox) {
+                                    return true;
+                                }
+
+                                var bbox = [
+                                    address.boundingbox[2],
+                                    address.boundingbox[0],
+                                    address.boundingbox[3],
+                                    address.boundingbox[1]
+                                ];
+                                bbox = new OpenLayers.Bounds(bbox);
+                                if (extent.intersectsBounds(bbox)) {
+                                    var lab = address.display_name.replace(labrex, '&lt;strong class="highlight">$1&lt;/strong>');
+                                    text += '&lt;li>&lt;a href="#' + bbox.toBBOX() + '">' + lab + '&lt;/a>&lt;/li>';
+                                    count++;
+                                }
+                            }
+                            if (count == 0 || text == '') {
+                                text = '&lt;li>' + lizDict['externalsearch.notfound'] + '&lt;/li>';
+                            }
+                            this._updateExternalSearch('&lt;li>&lt;strong>OpenStreetMap&lt;/strong>&lt;ul>' + text + '&lt;/ul>&lt;/li>');
+                        }, 'json');
+                    break;
+                case 'ign':
+                    let mapExtent4326 = transformExtent(mainLizmap.map.getView().calculateExtent(), mainLizmap.projection, 'EPSG:4326');
+                    let queryParam = '?text=' + $('#search-query').val() + '&amp;type=StreetAddress&amp;maximumResponses=10&amp;bbox=' + mapExtent4326
+                    $.getJSON(encodeURI(service + queryParam), data => {
+                        let text = '';
+                        let count = 0;
+                        for (const result of data.results) {
+                            var lab = result.fulltext.replace(labrex, '&lt;strong class="highlight">$1&lt;/strong>');
+                            text += '&lt;li>&lt;a href="#' + result.x + ',' + result.y + ',' + result.x + ',' + result.y + '">' + lab + '&lt;/a>&lt;/li>';
+                            count++;
+                        }
+                        if (count == 0 || text == '') {
+                            text = '&lt;li>' + lizDict['externalsearch.notfound'] + '&lt;/li>';
+                        }
+                        this._updateExternalSearch('&lt;li>&lt;strong>IGN&lt;/strong>&lt;ul>' + text + '&lt;/ul>&lt;/li>');
+                    });
+                    break;
+                case 'google':
+                    service.geocode({
+                        'address': $('#search-query').val(),
+                        'bounds': new google.maps.LatLngBounds(
+                            new google.maps.LatLng(extent.top, extent.left),
+                            new google.maps.LatLng(extent.bottom, extent.right)
+                        )
+                    }, (results, status) => {
+                        if (status == google.maps.GeocoderStatus.OK) {
+                            var text = '';
+                            var count = 0;
+                            for (const address of results) {
+                                if (count > 9) {
+                                    return false;
+                                }
+                                var bbox = [];
+                                if (address.geometry.viewport) {
+                                    bbox = [
+                                        address.geometry.viewport.getSouthWest().lng(),
+                                        address.geometry.viewport.getSouthWest().lat(),
+                                        address.geometry.viewport.getNorthEast().lng(),
+                                        address.geometry.viewport.getNorthEast().lat()
+                                    ];
+                                } else if (address.geometry.bounds) {
+                                    bbox = [
+                                        address.geometry.bounds.getSouthWest().lng(),
+                                        address.geometry.bounds.getSouthWest().lat(),
+                                        address.geometry.bounds.getNorthEast().lng(),
+                                        address.geometry.bounds.getNorthEast().lat()
+                                    ];
+                                }
+                                if (bbox.length != 4) {
+                                    return false;
+                                }
+                                bbox = new OpenLayers.Bounds(bbox);
+                                if (extent.intersectsBounds(bbox)) {
+                                    var lab = address.formatted_address.replace(labrex, '&lt;strong class="highlight">$1&lt;/strong>');
+                                    text += '&lt;li>&lt;a href="#' + bbox.toBBOX() + '">' + lab + '&lt;/a>&lt;/li>';
+                                    count++;
+                                }
+                            }
+                            if (count == 0 || text == '') {
+                                text = '&lt;li>' + lizDict['externalsearch.notfound'] + '&lt;/li>';
+                            }
+                            this._updateExternalSearch('&lt;li>&lt;strong>Google&lt;/strong>&lt;ul>' + text + '&lt;/ul>&lt;/li>');
+                        } else {
+                            this._updateExternalSearch('&lt;li>&lt;strong>Google&lt;/strong>&lt;ul>&lt;li>' + lizDict['externalsearch.notfound'] + '&lt;/li>&lt;/ul>&lt;/li>');
+                        }
+                    });
+                    break;
+            }
+            return false;
+        });
+
+        return true;
+    }
+
+    /**
+     * PRIVATE method: _addSearches
+     * add searches capability
+     *
+     * Returns:
+     * {Boolean} searches added to the user interface
+     */
+    _addSearches() {
+        var configOptions = this._config.options;
+        if (!('searches' in configOptions) || (configOptions.searches.length == 0)) {
+            return;
+        }
+
+        var searchOptions = configOptions.searches;
+        var searchAdded = false;
+        for (var i = 0, len = searchOptions.length; i &lt; len; i++) {
+            var searchOption = searchOptions[i];
+            var searchAddedResult = false;
+            if (searchOption.type == 'externalSearch') {
+                searchAddedResult = this._addExternalSearch(searchOption);
+            }
+            else {
+                searchAddedResult = this._addSearch(searchOption);
+            }
+            searchAdded = searchAdded || searchAddedResult;
+        }
+        if (!searchAdded) {
+            $('#nominatim-search').remove();
+            $('#lizmap-search, #lizmap-search-close').remove();
+        }
+        return searchAdded;
+    }
+
+    /**
+     *
+     * @param aHTML
+     */
+    _updateExternalSearch(aHTML) {
+        if ($('#search-query').val().length != 0) {
+            var wgs84 = new OpenLayers.Projection('EPSG:4326');
+
+            $('#lizmap-search .items li > a').unbind('click');
+            if ($('#lizmap-search .items li.start').length != 0) {
+                $('#lizmap-search .items').html(aHTML);
+            }
+            else {
+                $('#lizmap-search .items').append(aHTML);
+            }
+            $('#lizmap-search, #lizmap-search-close').addClass('open');
+            document.querySelectorAll('#lizmap-search .items li > a').forEach(link => {
+                link.addEventListener('click', evt => {
+                    evt.preventDefault();
+                    const linkClicked = evt.currentTarget;
+                    var bbox = linkClicked.getAttribute('href').replace('#', '');
+                    var bbox = OpenLayers.Bounds.fromString(bbox);
+                    bbox.transform(wgs84, this._map.getProjectionObject());
+                    this._map.zoomToExtent(bbox);
+    
+                    var feat = new OpenLayers.Feature.Vector(bbox.toGeometry().getCentroid());
+                    var geomWKT = linkClicked.getAttribute('data');
+                    if (geomWKT) {
+                        mainLizmap.map.setHighlightFeatures(geomWKT, "wkt", "EPSG:4326");
+                    }
+    
+                    $('#lizmap-search, #lizmap-search-close').removeClass('open');
+                    // trigger event containing selected feature
+                    lizMap.events.triggerEvent('lizmapexternalsearchitemselected',
+                        {
+                            'feature': feat
+                        }
+                    );
+                    return false;
+                });
+            });
+            
+            $('#lizmap-search-close button').click(() => {
+                $('#lizmap-search, #lizmap-search-close').removeClass('open');
+                return false;
+            });
+        }
+    }
+}</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector.html">ActionSelector</a></li><li><a href="module-Atlas.html">Atlas</a></li><li><a href="module-AttributeTable.html">AttributeTable</a></li><li><a href="module-Attribution.html">Attribution</a></li><li><a href="module-BaseLayer.html">BaseLayer</a></li><li><a href="module-BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseObject.html">BaseObject</a></li><li><a href="module-BottomDock.html">BottomDock</a></li><li><a href="module-Config.html">Config</a></li><li><a href="module-Constants.html">Constants</a></li><li><a href="module-Converters.html">Converters</a></li><li><a href="module-Dataviz.html">Dataviz</a></li><li><a href="module-Digitizing.html">Digitizing</a></li><li><a href="module-Draw.html">Draw</a></li><li><a href="module-Edition.html">Edition</a></li><li><a href="module-Enums.html">Enums</a></li><li><a href="module-Errors.html">Errors</a></li><li><a href="module-Extent.html">Extent</a></li><li><a href="module-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-Filter.html">Filter</a></li><li><a href="module-FormFilter.html">FormFilter</a></li><li><a href="module-FullScreen.html">FullScreen</a></li><li><a href="module-Geolocation.html">Geolocation</a></li><li><a href="module-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Index.html">Index</a></li><li><a href="module-Layer.html">Layer</a></li><li><a href="module-LayerState.html">LayerState</a></li><li><a href="module-LayerTree.html">LayerTree</a></li><li><a href="module-LayerTreeState.html">LayerTreeState</a></li><li><a href="module-LayersOrder.html">LayersOrder</a></li><li><a href="module-Legend.html">Legend</a></li><li><a href="module-Locate.html">Locate</a></li><li><a href="module-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.html">MapState</a></li><li><a href="module-Mask.html">Mask</a></li><li><a href="module-Metadata.html">Metadata</a></li><li><a href="module-MousePosition.html">MousePosition</a></li><li><a href="module-Options.html">Options</a></li><li><a href="module-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom.html">PasteGeom</a></li><li><a href="module-Permalink.html">Permalink</a></li><li><a href="module-Popup.html">Popup</a></li><li><a href="module-Print.html">Print</a></li><li><a href="module-PrintTemplate.html">PrintTemplate</a></li><li><a href="module-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom.html">ReverseGeom</a></li><li><a href="module-Scaleline.html">Scaleline</a></li><li><a href="module-Search.html">Search</a></li><li><a href="module-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping.html">Snapping</a></li><li><a href="module-State.html">State</a></li><li><a href="module-Switch%2520layer%2520actions.html">Switch layer actions</a></li><li><a href="module-SymbologyAction.html">SymbologyAction</a></li><li><a href="module-SymbologyState.html">SymbologyState</a></li><li><a href="module-Theme.html">Theme</a></li><li><a href="module-Time%2520manager.html">Time manager</a></li><li><a href="module-TimeManager.html">TimeManager</a></li><li><a href="module-Tools.html">Tools</a></li><li><a href="module-Tooltip.html">Tooltip</a></li><li><a href="module-Treeview.html">Treeview</a></li><li><a href="module-Utils.html">Utils</a></li><li><a href="module-View.html">View</a></li><li><a href="module-WFS.html">WFS</a></li><li><a href="module-WMS.html">WMS</a></li><li><a href="module-maps.html">maps</a></li></ul><h3>Classes</h3><ul><li><a href="EventDispatcher.html">EventDispatcher</a></li><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector-ActionSelector.html">ActionSelector</a></li><li><a href="module-Action-Action.html">Action</a></li><li><a href="module-AttributeTable.AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-AttributeTable.AttributeLayersConfig.html">AttributeLayersConfig</a></li><li><a href="module-AttributeTable-AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-Attribution.AttributionConfig.html">AttributionConfig</a></li><li><a href="module-Attribution-AttributionConfig.html">AttributionConfig</a></li><li><a href="module-BaseLayer.BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseLayer.BaseLayersConfig.html">BaseLayersConfig</a></li><li><a href="module-BaseLayer.BingBaseLayerConfig.html">BingBaseLayerConfig</a></li><li><a href="module-BaseLayer.EmptyBaseLayerConfig.html">EmptyBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmsBaseLayerConfig.html">WmsBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmtsBaseLayerConfig.html">WmtsBaseLayerConfig</a></li><li><a href="module-BaseLayer.XyzBaseLayerConfig.html">XyzBaseLayerConfig</a></li><li><a href="module-BaseLayerState.BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayerState.BaseLayersState.html">BaseLayersState</a></li><li><a href="module-BaseLayerState.BingBaseLayerState.html">BingBaseLayerState</a></li><li><a href="module-BaseLayerState.EmptyBaseLayerState.html">EmptyBaseLayerState</a></li><li><a href="module-BaseLayerState.WmsBaseLayerState.html">WmsBaseLayerState</a></li><li><a href="module-BaseLayerState.WmtsBaseLayerState.html">WmtsBaseLayerState</a></li><li><a href="module-BaseLayerState.XyzBaseLayerState.html">XyzBaseLayerState</a></li><li><a href="module-BaseLayers-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseLayer-BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectConfig.html">BaseObjectConfig</a></li><li><a href="module-BaseObject.BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectLayersConfig.html">BaseObjectLayersConfig</a></li><li><a href="module-BaseObject-BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-Config.Config.html">Config</a></li><li><a href="module-Config-Config.html">Config</a></li><li><a href="module-Dataviz.DatavizElementConfig.html">DatavizElementConfig</a></li><li><a href="module-Dataviz.DatavizLayersConfig.html">DatavizLayersConfig</a></li><li><a href="module-Dataviz.DatavizOptionsConfig.html">DatavizOptionsConfig</a></li><li><a href="module-Dataviz.DatavizPlotConfig.html">DatavizPlotConfig</a></li><li><a href="module-Dataviz.DatavizTraceConfig.html">DatavizTraceConfig</a></li><li><a href="module-Digitizing-Digitizing.html">Digitizing</a></li><li><a href="module-Draw-Draw.html">Draw</a></li><li><a href="module-Edition.EditionCapabilitiesConfig.html">EditionCapabilitiesConfig</a></li><li><a href="module-Edition.EditionLayerConfig.html">EditionLayerConfig</a></li><li><a href="module-Edition.EditionLayersConfig.html">EditionLayersConfig</a></li><li><a href="module-Edition-Edition.html">Edition</a></li><li><a href="module-Errors-ConversionError.html">ConversionError</a></li><li><a href="module-Errors-HttpError.html">HttpError</a></li><li><a href="module-Errors-PropertyRequiredError.html">PropertyRequiredError</a></li><li><a href="module-Errors-ValidationError.html">ValidationError</a></li><li><a href="module-Extent.Extent.html">Extent</a></li><li><a href="module-FeatureStorage-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-FormFilter.FormFilterConfig.html">FormFilterConfig</a></li><li><a href="module-FormFilter.FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FormFilter-FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FullScreen-FullScreen.html">FullScreen</a></li><li><a href="module-GeolocationSurvey-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Geolocation-Geolocation.html">Geolocation</a></li><li><a href="module-Layer.LayerConfig.html">LayerConfig</a></li><li><a href="module-Layer.LayersConfig.html">LayersConfig</a></li><li><a href="module-LayerState.LayerGroupState.html">LayerGroupState</a></li><li><a href="module-LayerState.LayerItemState.html">LayerItemState</a></li><li><a href="module-LayerState.LayerLayerState.html">LayerLayerState</a></li><li><a href="module-LayerState.LayerRasterState.html">LayerRasterState</a></li><li><a href="module-LayerState.LayerVectorState.html">LayerVectorState</a></li><li><a href="module-LayerState.LayersAndGroupsCollection.html">LayersAndGroupsCollection</a></li><li><a href="module-LayerTree.LayerBoundingBoxConfig.html">LayerBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerGeographicBoundingBoxConfig.html">LayerGeographicBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerStyleConfig.html">LayerStyleConfig</a></li><li><a href="module-LayerTree.LayerTreeGroupConfig.html">LayerTreeGroupConfig</a></li><li><a href="module-LayerTree.LayerTreeItemConfig.html">LayerTreeItemConfig</a></li><li><a href="module-LayerTree.LayerTreeLayerConfig.html">LayerTreeLayerConfig</a></li><li><a href="module-LayerTreeState.LayerTreeGroupState.html">LayerTreeGroupState</a></li><li><a href="module-LayerTreeState.LayerTreeItemState.html">LayerTreeItemState</a></li><li><a href="module-LayerTreeState.LayerTreeLayerState.html">LayerTreeLayerState</a></li><li><a href="module-Legend-Legend.html">Legend</a></li><li><a href="module-Locate.LocateByLayerConfig.html">LocateByLayerConfig</a></li><li><a href="module-Locate.LocateLayerConfig.html">LocateLayerConfig</a></li><li><a href="module-MGRS-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.MapGroupState.html">MapGroupState</a></li><li><a href="module-MapLayerState.MapItemState.html">MapItemState</a></li><li><a href="module-MapLayerState.MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.MapState.html">MapState</a></li><li><a href="module-Mask-Mask.html">Mask</a></li><li><a href="module-Metadata.MetadataConfig.html">MetadataConfig</a></li><li><a href="module-MousePosition-MousePosition.html">MousePosition</a></li><li><a href="module-Options.OptionsConfig.html">OptionsConfig</a></li><li><a href="module-OverviewMap-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom-pasteGeom.html">pasteGeom</a></li><li><a href="module-Permalink-Permalink.html">Permalink</a></li><li><a href="module-Popup-Popup.html">Popup</a></li><li><a href="module-PrintTemplate.PrintAtlasConfig.html">PrintAtlasConfig</a></li><li><a href="module-PrintTemplate.PrintLabelConfig.html">PrintLabelConfig</a></li><li><a href="module-PrintTemplate.PrintMapConfig.html">PrintMapConfig</a></li><li><a href="module-PrintTemplate.PrintTemplateConfig.html">PrintTemplateConfig</a></li><li><a href="module-Print-Print.html">Print</a></li><li><a href="module-ProxyEvents-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom-reverseGeom.html">reverseGeom</a></li><li><a href="module-Scaleline-Scaleline.html">Scaleline</a></li><li><a href="module-Search-Search.html">Search</a></li><li><a href="module-SelectionInvert-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping-Snapping.html">Snapping</a></li><li><a href="module-State.State.html">State</a></li><li><a href="module-State-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-State-SelectionTool.html">SelectionTool</a></li><li><a href="module-State-State.html">State</a></li><li><a href="module-SymbologyState.BaseIconSymbology.html">BaseIconSymbology</a></li><li><a href="module-SymbologyState.BaseObjectSymbology.html">BaseObjectSymbology</a></li><li><a href="module-SymbologyState.BaseSymbolsSymbology.html">BaseSymbolsSymbology</a></li><li><a href="module-SymbologyState.LayerGroupSymbology.html">LayerGroupSymbology</a></li><li><a href="module-SymbologyState.LayerIconSymbology.html">LayerIconSymbology</a></li><li><a href="module-SymbologyState.LayerSymbolsSymbology.html">LayerSymbolsSymbology</a></li><li><a href="module-SymbologyState.SymbolIconSymbology.html">SymbolIconSymbology</a></li><li><a href="module-SymbologyState.SymbolRuleSymbology.html">SymbolRuleSymbology</a></li><li><a href="module-Theme.LayerThemeConfig.html">LayerThemeConfig</a></li><li><a href="module-Theme.ThemeConfig.html">ThemeConfig</a></li><li><a href="module-Theme.ThemesConfig.html">ThemesConfig</a></li><li><a href="module-TimeManager.TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-TimeManager.TimeManagerLayersConfig.html">TimeManagerLayersConfig</a></li><li><a href="module-TimeManager-TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayerConfig.html">TooltipLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayersConfig.html">TooltipLayersConfig</a></li><li><a href="module-Treeview-Treeview.html">Treeview</a></li><li><a href="module-Utils-Utils.html">Utils</a></li><li><a href="module-WFS-WFS.html">WFS</a></li><li><a href="module-WMS-WMS.html">WMS</a></li><li><a href="module-maps-map.html">map</a></li></ul><h3>Events</h3><ul><li><a href="module-Action.html#~event:actionResultReceived">actionResultReceived</a></li><li><a href="global.html#event:beforetreecreated">beforetreecreated</a></li><li><a href="global.html#event:layersadded">layersadded</a></li><li><a href="global.html#event:mapcreated">mapcreated</a></li><li><a href="global.html#event:treecreated">treecreated</a></li></ul><h3>Global</h3><ul><li><a href="global.html#addListener">addListener</a></li><li><a href="global.html#dispatch">dispatch</a></li><li><a href="global.html#removeListener">removeListener</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.2</a> on Wed Feb 14 2024 14:50:29 GMT+0100 (Central European Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

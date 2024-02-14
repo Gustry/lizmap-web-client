@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: modules/state/LayerTree.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: modules/state/LayerTree.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module state/LayerTree.js
+ * @name LayerTreeState
+ * @copyright 2023 3Liz
+ * @author DHONT René-Luc
+ * @license MPL-2.0
+ */
+
+import EventDispatcher from './../../utils/EventDispatcher.js';
+import { LayerConfig } from './../config/Layer.js';
+import { AttributionConfig } from './../config/Attribution.js'
+import { LayerStyleConfig, LayerGeographicBoundingBoxConfig, LayerBoundingBoxConfig } from './../config/LayerTree.js';
+import { MapItemState, MapGroupState, MapLayerState } from './MapLayer.js';
+import { getDefaultLayerIcon, LayerIconSymbology, LayerSymbolsSymbology, LayerGroupSymbology, SymbolIconSymbology, BaseIconSymbology, BaseSymbolsSymbology } from './Symbology.js';
+import { convertBoolean } from './../utils/Converters.js';
+
+/**
+ * Class representing a layer tree item
+ * @class
+ * @augments EventDispatcher
+ */
+export class LayerTreeItemState extends EventDispatcher {
+
+    /**
+     * Instantiate a layer tree item
+     * @param {MapItemState}       mapItemState       - the map item state
+     * @param {LayerTreeItemState} [parentGroupState] - the parent layer tree group
+     */
+    constructor(mapItemState, parentGroupState) {
+        super();
+        this._mapItemState = mapItemState;
+        this._parentGroupState = null;
+
+        this._expanded = false;
+        if (this.type === "group") {
+            this._expanded = true;
+        } else {
+            this._expanded = this.layerConfig.legendImageOption === "expand_at_startup";
+        }
+
+        if (parentGroupState instanceof LayerTreeItemState
+            &amp;&amp; parentGroupState.type == 'group') {
+            this._parentGroupState = parentGroupState;
+        }
+        if (mapItemState instanceof MapLayerState) {
+            mapItemState.addListener(this.dispatch.bind(this), 'layer.visibility.changed');
+            mapItemState.addListener(this.dispatch.bind(this), 'layer.symbology.changed');
+            mapItemState.addListener(this.dispatch.bind(this), 'layer.opacity.changed');
+            mapItemState.addListener(this.dispatch.bind(this), 'layer.loading.changed');
+            mapItemState.addListener(this.dispatch.bind(this), 'layer.load.status.changed');
+            mapItemState.addListener(this.dispatch.bind(this), 'layer.style.changed');
+            mapItemState.addListener(this.dispatch.bind(this), 'layer.symbol.checked.changed');
+            mapItemState.addListener(this.dispatch.bind(this), 'layer.selection.changed');
+            mapItemState.addListener(this.dispatch.bind(this), 'layer.selection.token.changed');
+            mapItemState.addListener(this.dispatch.bind(this), 'layer.filter.changed');
+            mapItemState.addListener(this.dispatch.bind(this), 'layer.filter.token.changed');
+        } else if (mapItemState instanceof MapGroupState) {
+            mapItemState.addListener(this.dispatch.bind(this), 'group.visibility.changed');
+            mapItemState.addListener(this.dispatch.bind(this), 'group.symbology.changed');
+            mapItemState.addListener(this.dispatch.bind(this), 'group.opacity.changed');
+        }
+    }
+    /**
+     * Config layers
+     * @type {string}
+     */
+    get name() {
+        return this._mapItemState.name;
+    }
+
+    /**
+     * Config layers
+     * @type {string}
+     */
+    get type() {
+        return this._mapItemState.type;
+    }
+
+    /**
+     * Layer tree item level
+     * @type {number}
+     */
+    get level() {
+        return this._mapItemState.level;
+    }
+
+    /**
+     * WMS layer name
+     * @type {?string}
+     */
+    get wmsName() {
+        return this._mapItemState.wmsName;
+    }
+
+    /**
+     * WMS layer title
+     * @type {string}
+     */
+    get wmsTitle() {
+        return this._mapItemState.wmsTitle;
+    }
+
+    /**
+     * WMS layer Geographic Bounding Box
+     * @type {?LayerGeographicBoundingBoxConfig}
+     */
+    get wmsGeographicBoundingBox() {
+        return this._mapItemState.wmsGeographicBoundingBox;
+    }
+
+    /**
+     * WMS layer Bounding Boxes
+     * @type {LayerBoundingBoxConfig[]}
+     */
+    get wmsBoundingBoxes() {
+        return this._mapItemState.wmsBoundingBoxes;
+    }
+
+    /**
+     * WMS Minimum scale denominator
+     * If the minimum scale denominator is not defined: -1 is returned
+     * If the WMS layer is a group, the minimum scale denominator is -1 if only one layer
+     * minimum scale denominator is not defined else the smallest layer minimum scale denominator
+     * in the group
+     * @type {number}
+     */
+    get wmsMinScaleDenominator() {
+        return this._mapItemState.wmsMinScaleDenominator;
+    }
+
+    /**
+     * WMS layer maximum scale denominator
+     * If the maximum scale denominator is not defined: -1 is returned
+     * If the WMS layer is a group, the maximum scale denominator is the largest of the layers in the group
+     * @type {number}
+     */
+    get wmsMaxScaleDenominator() {
+        return this._mapItemState.wmsMaxScaleDenominator;
+    }
+
+    /**
+     * Layer tree item is checked
+     * @type {boolean}
+     */
+    get checked() {
+        return this._mapItemState.checked;
+    }
+
+    /**
+     * Set layer tree item is checked
+     * @type {boolean}
+     */
+    set checked(val) {
+        this._mapItemState.checked = val;
+    }
+
+    /**
+     * Layer tree item is visible
+     * It depends on the parent visibility
+     * @type {boolean}
+     */
+    get visibility() {
+        return this._mapItemState.visibility;
+    }
+
+    /**
+     * Layer tree item opacity
+     * @type {number}
+     */
+    get opacity() {
+        return this._mapItemState.opacity;
+    }
+
+    /**
+     * Set layer tree item opacity
+     * @type {number}
+     */
+    set opacity(val) {
+        this._mapItemState.opacity = val;
+    }
+
+    /**
+     * Lizmap layer config
+     * @type {?LayerConfig}
+     */
+    get layerConfig() {
+        return this._mapItemState.layerConfig;
+    }
+
+    /**
+     * Map item state
+     * @type {?MapItemState}
+     */
+    get mapItemState() {
+        return this._mapItemState;
+    }
+
+    /**
+     * Layer tree item is expanded
+     * @type {boolean}
+     */
+    get expanded() {
+        return this._expanded;
+    }
+
+    /**
+     * Set layer tree item is expanded
+     * @type {boolean}
+     */
+    set expanded(val) {
+        const newVal = convertBoolean(val);
+        if(this._expanded === newVal){
+            return;
+        }
+
+        this._expanded = newVal;
+
+        this.dispatch({
+            type: this.type + '.expanded.changed',
+            name: this.name
+        });
+    }
+
+    /**
+     * Calculate and save visibility
+     * @returns {boolean} the calculated visibility
+     */
+    calculateVisibility() {
+        return this._mapItemState.calculateVisibility();
+    }
+
+    /**
+     * Get item visibility taking care of this.visibility and scale
+     * @param {number} scaleDenominator the scale denominator for which the visibility has to be evaluated
+     * @returns {boolean} the item visibility
+     */
+    isVisible(scaleDenominator) {
+        if (this.type === 'group') {
+            return this.visibility;
+        }
+
+        if(this._mapItemState.wmsMinScaleDenominator !== undefined &amp;&amp; this._mapItemState.wmsMaxScaleDenominator !== undefined){
+            return this.visibility &amp;&amp; this._mapItemState.wmsMinScaleDenominator &lt; scaleDenominator
+            &amp;&amp; scaleDenominator &lt; this._mapItemState.wmsMaxScaleDenominator;
+        }
+        return this.visibility;
+    }
+}
+
+/**
+ * Class representing a layer tree group
+ * @class
+ * @augments LayerTreeItemState
+ */
+export class LayerTreeGroupState extends LayerTreeItemState {
+
+    /**
+     * Instantiate a layer tree group
+     * @param {MapGroupState}       mapGroupState      - the map layer group state
+     * @param {LayerTreeGroupState} [parentGroupState] - the parent layer tree group
+     */
+    constructor(mapGroupState, parentGroupState) {
+        super(mapGroupState, parentGroupState);
+        this._items = [];
+        for (const mapItemState of mapGroupState.getChildren()) {
+
+            if (mapItemState instanceof MapGroupState) {
+                // Build group
+                const group = new LayerTreeGroupState(mapItemState, this);
+                // If the group is empty do not keep it
+                if (group.childrenCount == 0) {
+                    continue;
+                }
+                group.addListener(this.dispatch.bind(this), 'group.visibility.changed');
+                group.addListener(this.dispatch.bind(this), 'group.expanded.changed');
+                group.addListener(this.dispatch.bind(this), 'group.symbology.changed');
+                group.addListener(this.dispatch.bind(this), 'group.opacity.changed');
+                group.addListener(this.dispatch.bind(this), 'layer.symbology.changed');
+                group.addListener(this.dispatch.bind(this), 'layer.visibility.changed');
+                group.addListener(this.dispatch.bind(this), 'layer.expanded.changed');
+                group.addListener(this.dispatch.bind(this), 'layer.opacity.changed');
+                group.addListener(this.dispatch.bind(this), 'layer.loading.changed');
+                group.addListener(this.dispatch.bind(this), 'layer.load.status.changed');
+                group.addListener(this.dispatch.bind(this), 'layer.style.changed');
+                group.addListener(this.dispatch.bind(this), 'layer.symbol.checked.changed');
+                group.addListener(this.dispatch.bind(this), 'layer.selection.changed');
+                group.addListener(this.dispatch.bind(this), 'layer.selection.token.changed');
+                group.addListener(this.dispatch.bind(this), 'layer.filter.changed');
+                group.addListener(this.dispatch.bind(this), 'layer.filter.token.changed');
+                this._items.push(group);
+            } else if (mapItemState instanceof MapLayerState) {
+                if (!mapItemState.displayInLayerTree) {
+                    continue;
+                }
+                // Build layer
+                const layer = new LayerTreeLayerState(mapItemState, this)
+                layer.addListener(this.dispatch.bind(this), 'layer.visibility.changed');
+                layer.addListener(this.dispatch.bind(this), 'layer.expanded.changed');
+                layer.addListener(this.dispatch.bind(this), 'layer.symbology.changed');
+                layer.addListener(this.dispatch.bind(this), 'layer.opacity.changed');
+                layer.addListener(this.dispatch.bind(this), 'layer.loading.changed');
+                layer.addListener(this.dispatch.bind(this), 'layer.load.status.changed');
+                layer.addListener(this.dispatch.bind(this), 'layer.style.changed');
+                layer.addListener(this.dispatch.bind(this), 'layer.symbol.checked.changed');
+                layer.addListener(this.dispatch.bind(this), 'layer.selection.changed');
+                layer.addListener(this.dispatch.bind(this), 'layer.selection.token.changed');
+                layer.addListener(this.dispatch.bind(this), 'layer.filter.changed');
+                layer.addListener(this.dispatch.bind(this), 'layer.filter.token.changed');
+                this._items.push(layer);
+            }
+        }
+    }
+
+    /**
+     * The layer mutually exclusive activation (group only)
+     * @type {boolean}
+     */
+    get mutuallyExclusive() {
+        if (this.layerConfig == null) {
+            return false;
+        }
+        return this.layerConfig.mutuallyExclusive;
+    }
+
+    /**
+     * Children items count
+     * @type {number}
+     */
+    get childrenCount() {
+        return this._items.length;
+    }
+
+    /**
+     * Children items
+     * @type {LayerTreeItemState[]}
+     */
+    get children() {
+        return [...this._items];
+    }
+
+    /**
+     * Iterate through children items
+     * @generator
+     * @yields {LayerTreeItemState} The next child item
+     */
+    *getChildren() {
+        for (const item of this._items) {
+            yield item;
+        }
+    }
+
+    /**
+     * Find layer names
+     * @returns {string[]} The layer names of all tree layers
+     */
+    findTreeLayerNames() {
+        let names = []
+        for(const item of this.getChildren()) {
+            if (item instanceof LayerTreeLayerState) {
+                names.push(item.name);
+            } else if (item instanceof LayerTreeGroupState) {
+                names = names.concat(item.findTreeLayerNames());
+            }
+        }
+        return names;
+    }
+
+    /**
+     * Find layer items
+     * @returns {LayerTreeLayerState[]} The tree layer states of all tree layers
+     */
+    findTreeLayers() {
+        let items = []
+        for(const item of this.getChildren()) {
+            if (item instanceof LayerTreeLayerState) {
+                items.push(item);
+            } else if (item instanceof LayerTreeGroupState) {
+                items = items.concat(item.findTreeLayers());
+            }
+        }
+        return items;
+    }
+
+    /**
+     * Find layer and group items
+     * @returns {LayerTreeLayerState[]} All tThe tree layer and tree group states
+     */
+    findTreeLayersAndGroups() {
+        let items = []
+        for(const item of this.getChildren()) {
+            if (item instanceof LayerTreeLayerState) {
+                items.push(item);
+            } else if (item instanceof LayerTreeGroupState) {
+                items.push(item);
+                items = items.concat(item.findTreeLayersAndGroups());
+            }
+        }
+        return items;
+    }
+
+    /**
+     * Get tree layer item by its name
+     * @param {string} name - the layer name
+     * @returns {LayerTreeLayerState} The LayerTreeLayerState associated to the name
+     */
+    getTreeLayerByName(name) {
+        for (const layer of this.findTreeLayers()) {
+            if(layer.name === name) {
+                return layer;
+            }
+        }
+        throw RangeError('The layer name `'+ name +'` is unknown!');
+    }
+}
+
+/**
+ * Class representing a layer tree layer
+ * @class
+ * @augments LayerTreeItemState
+ */
+export class LayerTreeLayerState extends LayerTreeItemState {
+
+    /**
+     * Instantiate a layer tree layer
+     * @param {MapLayerState}       mapLayerState      - the map layer state
+     * @param {LayerTreeGroupState} [parentGroupState] - the parent layer tree group
+     */
+    constructor(mapLayerState, parentGroupState) {
+        super(mapLayerState, parentGroupState);
+        // set default icon
+        this._icon = getDefaultLayerIcon(this.layerConfig);
+    }
+
+    /**
+     * Vector layer has selected features
+     * The selected features is not empty
+     * @type {boolean}
+     */
+    get hasSelectedFeatures() {
+        return this._mapItemState.hasSelectedFeatures;
+    }
+
+    /**
+     * Vector layer is filtered
+     * The expression filter is not null
+     * @type {boolean}
+     */
+    get isFiltered() {
+        return this._mapItemState.isFiltered;
+    }
+
+    /**
+     * The source icon of the layer
+     * @type {string}
+     */
+    get icon() {
+        if (this._mapItemState.symbology instanceof LayerIconSymbology) {
+            return this.symbology.icon;
+        }
+        return this._icon;
+    }
+
+    /**
+     * WMS selected layer style name
+     * @type {string}
+     */
+    get wmsSelectedStyleName() {
+        return this._mapItemState.wmsSelectedStyleName;
+    }
+
+    /**
+     * Update WMS selected layer style name
+     * based on wmsStyles list
+     * @param {string} styleName - the WMS layer style name to select
+     */
+    set wmsSelectedStyleName(styleName) {
+        this._mapItemState.wmsSelectedStyleName = styleName;
+    }
+
+    /**
+     * WMS layer styles
+     * @type {LayerStyleConfig[]}
+     */
+    get wmsStyles() {
+        return this._mapItemState.wmsStyles;
+    }
+
+    /**
+     * WMS layer attribution
+     * @type {?AttributionConfig}
+     */
+    get wmsAttribution() {
+        return this._mapItemState.wmsAttribution;
+    }
+
+    /**
+     * Parameters for OGC WMS Request
+     * @type {object}
+     */
+    get wmsParameters() {
+        return this._mapItemState.wmsParameters;
+    }
+
+    /**
+     * The layer load status
+     * @see MapLayerLoadStatus
+     * @type {string}
+     */
+    get loadStatus() {
+        return this._mapItemState.loadStatus;
+    }
+
+    /**
+     * Layer symbology
+     * @type {?(LayerIconSymbology|LayerSymbolsSymbology|LayerGroupSymbology)}
+     */
+    get symbology() {
+        return this._mapItemState.symbology;
+    }
+
+    /**
+     * Update layer symbology
+     * @param {(object | LayerIconSymbology | LayerSymbolsSymbology | LayerGroupSymbology)} node - The symbology node
+     */
+    set symbology(node) {
+        this._mapItemState.symbology = node;
+    }
+
+    /**
+     * Children symbology count
+     * @type {number}
+     */
+    get symbologyChildrenCount() {
+        if (this._mapItemState.symbology instanceof LayerSymbolsSymbology
+            || this._mapItemState.symbology instanceof LayerGroupSymbology) {
+            return this._mapItemState.symbology.childrenCount;
+        }
+        return 0;
+    }
+
+    /**
+     * Children symbology
+     * @type {(SymbolIconSymbology[]|Array.&lt;BaseIconSymbology|BaseSymbolsSymbology>)}
+     */
+    get symbologyChildren() {
+        if (this._mapItemState.symbology instanceof LayerSymbolsSymbology
+            || this._mapItemState.symbology instanceof LayerGroupSymbology) {
+            return this._mapItemState.symbology.children;
+        }
+        return [];
+    }
+
+
+    /**
+     * Iterate through children nodes
+     * @generator
+     * @yields {SymbolIconSymbology|BaseIconSymbology|BaseSymbolsSymbology} The next child node
+     */
+    *getSymbologyChildren() {
+        if (this._mapItemState.symbology instanceof LayerSymbolsSymbology
+            || this._mapItemState.symbology instanceof LayerGroupSymbology) {
+            for (const symbol of this._mapItemState.symbology.getChildren()) {
+                yield symbol;
+            }
+        }
+    }
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector.html">ActionSelector</a></li><li><a href="module-Atlas.html">Atlas</a></li><li><a href="module-AttributeTable.html">AttributeTable</a></li><li><a href="module-Attribution.html">Attribution</a></li><li><a href="module-BaseLayer.html">BaseLayer</a></li><li><a href="module-BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseObject.html">BaseObject</a></li><li><a href="module-BottomDock.html">BottomDock</a></li><li><a href="module-Config.html">Config</a></li><li><a href="module-Constants.html">Constants</a></li><li><a href="module-Converters.html">Converters</a></li><li><a href="module-Dataviz.html">Dataviz</a></li><li><a href="module-Digitizing.html">Digitizing</a></li><li><a href="module-Draw.html">Draw</a></li><li><a href="module-Edition.html">Edition</a></li><li><a href="module-Enums.html">Enums</a></li><li><a href="module-Errors.html">Errors</a></li><li><a href="module-Extent.html">Extent</a></li><li><a href="module-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-Filter.html">Filter</a></li><li><a href="module-FormFilter.html">FormFilter</a></li><li><a href="module-FullScreen.html">FullScreen</a></li><li><a href="module-Geolocation.html">Geolocation</a></li><li><a href="module-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Index.html">Index</a></li><li><a href="module-Layer.html">Layer</a></li><li><a href="module-LayerState.html">LayerState</a></li><li><a href="module-LayerTree.html">LayerTree</a></li><li><a href="module-LayerTreeState.html">LayerTreeState</a></li><li><a href="module-LayersOrder.html">LayersOrder</a></li><li><a href="module-Legend.html">Legend</a></li><li><a href="module-Locate.html">Locate</a></li><li><a href="module-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.html">MapState</a></li><li><a href="module-Mask.html">Mask</a></li><li><a href="module-Metadata.html">Metadata</a></li><li><a href="module-MousePosition.html">MousePosition</a></li><li><a href="module-Options.html">Options</a></li><li><a href="module-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom.html">PasteGeom</a></li><li><a href="module-Permalink.html">Permalink</a></li><li><a href="module-Popup.html">Popup</a></li><li><a href="module-Print.html">Print</a></li><li><a href="module-PrintTemplate.html">PrintTemplate</a></li><li><a href="module-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom.html">ReverseGeom</a></li><li><a href="module-Scaleline.html">Scaleline</a></li><li><a href="module-Search.html">Search</a></li><li><a href="module-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping.html">Snapping</a></li><li><a href="module-State.html">State</a></li><li><a href="module-Switch%2520layer%2520actions.html">Switch layer actions</a></li><li><a href="module-SymbologyAction.html">SymbologyAction</a></li><li><a href="module-SymbologyState.html">SymbologyState</a></li><li><a href="module-Theme.html">Theme</a></li><li><a href="module-Time%2520manager.html">Time manager</a></li><li><a href="module-TimeManager.html">TimeManager</a></li><li><a href="module-Tools.html">Tools</a></li><li><a href="module-Tooltip.html">Tooltip</a></li><li><a href="module-Treeview.html">Treeview</a></li><li><a href="module-Utils.html">Utils</a></li><li><a href="module-View.html">View</a></li><li><a href="module-WFS.html">WFS</a></li><li><a href="module-WMS.html">WMS</a></li><li><a href="module-maps.html">maps</a></li></ul><h3>Classes</h3><ul><li><a href="EventDispatcher.html">EventDispatcher</a></li><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector-ActionSelector.html">ActionSelector</a></li><li><a href="module-Action-Action.html">Action</a></li><li><a href="module-AttributeTable.AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-AttributeTable.AttributeLayersConfig.html">AttributeLayersConfig</a></li><li><a href="module-AttributeTable-AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-Attribution.AttributionConfig.html">AttributionConfig</a></li><li><a href="module-Attribution-AttributionConfig.html">AttributionConfig</a></li><li><a href="module-BaseLayer.BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseLayer.BaseLayersConfig.html">BaseLayersConfig</a></li><li><a href="module-BaseLayer.BingBaseLayerConfig.html">BingBaseLayerConfig</a></li><li><a href="module-BaseLayer.EmptyBaseLayerConfig.html">EmptyBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmsBaseLayerConfig.html">WmsBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmtsBaseLayerConfig.html">WmtsBaseLayerConfig</a></li><li><a href="module-BaseLayer.XyzBaseLayerConfig.html">XyzBaseLayerConfig</a></li><li><a href="module-BaseLayerState.BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayerState.BaseLayersState.html">BaseLayersState</a></li><li><a href="module-BaseLayerState.BingBaseLayerState.html">BingBaseLayerState</a></li><li><a href="module-BaseLayerState.EmptyBaseLayerState.html">EmptyBaseLayerState</a></li><li><a href="module-BaseLayerState.WmsBaseLayerState.html">WmsBaseLayerState</a></li><li><a href="module-BaseLayerState.WmtsBaseLayerState.html">WmtsBaseLayerState</a></li><li><a href="module-BaseLayerState.XyzBaseLayerState.html">XyzBaseLayerState</a></li><li><a href="module-BaseLayers-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseLayer-BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectConfig.html">BaseObjectConfig</a></li><li><a href="module-BaseObject.BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectLayersConfig.html">BaseObjectLayersConfig</a></li><li><a href="module-BaseObject-BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-Config.Config.html">Config</a></li><li><a href="module-Config-Config.html">Config</a></li><li><a href="module-Dataviz.DatavizElementConfig.html">DatavizElementConfig</a></li><li><a href="module-Dataviz.DatavizLayersConfig.html">DatavizLayersConfig</a></li><li><a href="module-Dataviz.DatavizOptionsConfig.html">DatavizOptionsConfig</a></li><li><a href="module-Dataviz.DatavizPlotConfig.html">DatavizPlotConfig</a></li><li><a href="module-Dataviz.DatavizTraceConfig.html">DatavizTraceConfig</a></li><li><a href="module-Digitizing-Digitizing.html">Digitizing</a></li><li><a href="module-Draw-Draw.html">Draw</a></li><li><a href="module-Edition.EditionCapabilitiesConfig.html">EditionCapabilitiesConfig</a></li><li><a href="module-Edition.EditionLayerConfig.html">EditionLayerConfig</a></li><li><a href="module-Edition.EditionLayersConfig.html">EditionLayersConfig</a></li><li><a href="module-Edition-Edition.html">Edition</a></li><li><a href="module-Errors-ConversionError.html">ConversionError</a></li><li><a href="module-Errors-HttpError.html">HttpError</a></li><li><a href="module-Errors-PropertyRequiredError.html">PropertyRequiredError</a></li><li><a href="module-Errors-ValidationError.html">ValidationError</a></li><li><a href="module-Extent.Extent.html">Extent</a></li><li><a href="module-FeatureStorage-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-FormFilter.FormFilterConfig.html">FormFilterConfig</a></li><li><a href="module-FormFilter.FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FormFilter-FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FullScreen-FullScreen.html">FullScreen</a></li><li><a href="module-GeolocationSurvey-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Geolocation-Geolocation.html">Geolocation</a></li><li><a href="module-Layer.LayerConfig.html">LayerConfig</a></li><li><a href="module-Layer.LayersConfig.html">LayersConfig</a></li><li><a href="module-LayerState.LayerGroupState.html">LayerGroupState</a></li><li><a href="module-LayerState.LayerItemState.html">LayerItemState</a></li><li><a href="module-LayerState.LayerLayerState.html">LayerLayerState</a></li><li><a href="module-LayerState.LayerRasterState.html">LayerRasterState</a></li><li><a href="module-LayerState.LayerVectorState.html">LayerVectorState</a></li><li><a href="module-LayerState.LayersAndGroupsCollection.html">LayersAndGroupsCollection</a></li><li><a href="module-LayerTree.LayerBoundingBoxConfig.html">LayerBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerGeographicBoundingBoxConfig.html">LayerGeographicBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerStyleConfig.html">LayerStyleConfig</a></li><li><a href="module-LayerTree.LayerTreeGroupConfig.html">LayerTreeGroupConfig</a></li><li><a href="module-LayerTree.LayerTreeItemConfig.html">LayerTreeItemConfig</a></li><li><a href="module-LayerTree.LayerTreeLayerConfig.html">LayerTreeLayerConfig</a></li><li><a href="module-LayerTreeState.LayerTreeGroupState.html">LayerTreeGroupState</a></li><li><a href="module-LayerTreeState.LayerTreeItemState.html">LayerTreeItemState</a></li><li><a href="module-LayerTreeState.LayerTreeLayerState.html">LayerTreeLayerState</a></li><li><a href="module-Legend-Legend.html">Legend</a></li><li><a href="module-Locate.LocateByLayerConfig.html">LocateByLayerConfig</a></li><li><a href="module-Locate.LocateLayerConfig.html">LocateLayerConfig</a></li><li><a href="module-MGRS-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.MapGroupState.html">MapGroupState</a></li><li><a href="module-MapLayerState.MapItemState.html">MapItemState</a></li><li><a href="module-MapLayerState.MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.MapState.html">MapState</a></li><li><a href="module-Mask-Mask.html">Mask</a></li><li><a href="module-Metadata.MetadataConfig.html">MetadataConfig</a></li><li><a href="module-MousePosition-MousePosition.html">MousePosition</a></li><li><a href="module-Options.OptionsConfig.html">OptionsConfig</a></li><li><a href="module-OverviewMap-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom-pasteGeom.html">pasteGeom</a></li><li><a href="module-Permalink-Permalink.html">Permalink</a></li><li><a href="module-Popup-Popup.html">Popup</a></li><li><a href="module-PrintTemplate.PrintAtlasConfig.html">PrintAtlasConfig</a></li><li><a href="module-PrintTemplate.PrintLabelConfig.html">PrintLabelConfig</a></li><li><a href="module-PrintTemplate.PrintMapConfig.html">PrintMapConfig</a></li><li><a href="module-PrintTemplate.PrintTemplateConfig.html">PrintTemplateConfig</a></li><li><a href="module-Print-Print.html">Print</a></li><li><a href="module-ProxyEvents-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom-reverseGeom.html">reverseGeom</a></li><li><a href="module-Scaleline-Scaleline.html">Scaleline</a></li><li><a href="module-Search-Search.html">Search</a></li><li><a href="module-SelectionInvert-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping-Snapping.html">Snapping</a></li><li><a href="module-State.State.html">State</a></li><li><a href="module-State-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-State-SelectionTool.html">SelectionTool</a></li><li><a href="module-State-State.html">State</a></li><li><a href="module-SymbologyState.BaseIconSymbology.html">BaseIconSymbology</a></li><li><a href="module-SymbologyState.BaseObjectSymbology.html">BaseObjectSymbology</a></li><li><a href="module-SymbologyState.BaseSymbolsSymbology.html">BaseSymbolsSymbology</a></li><li><a href="module-SymbologyState.LayerGroupSymbology.html">LayerGroupSymbology</a></li><li><a href="module-SymbologyState.LayerIconSymbology.html">LayerIconSymbology</a></li><li><a href="module-SymbologyState.LayerSymbolsSymbology.html">LayerSymbolsSymbology</a></li><li><a href="module-SymbologyState.SymbolIconSymbology.html">SymbolIconSymbology</a></li><li><a href="module-SymbologyState.SymbolRuleSymbology.html">SymbolRuleSymbology</a></li><li><a href="module-Theme.LayerThemeConfig.html">LayerThemeConfig</a></li><li><a href="module-Theme.ThemeConfig.html">ThemeConfig</a></li><li><a href="module-Theme.ThemesConfig.html">ThemesConfig</a></li><li><a href="module-TimeManager.TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-TimeManager.TimeManagerLayersConfig.html">TimeManagerLayersConfig</a></li><li><a href="module-TimeManager-TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayerConfig.html">TooltipLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayersConfig.html">TooltipLayersConfig</a></li><li><a href="module-Treeview-Treeview.html">Treeview</a></li><li><a href="module-Utils-Utils.html">Utils</a></li><li><a href="module-WFS-WFS.html">WFS</a></li><li><a href="module-WMS-WMS.html">WMS</a></li><li><a href="module-maps-map.html">map</a></li></ul><h3>Events</h3><ul><li><a href="module-Action.html#~event:actionResultReceived">actionResultReceived</a></li><li><a href="global.html#event:beforetreecreated">beforetreecreated</a></li><li><a href="global.html#event:layersadded">layersadded</a></li><li><a href="global.html#event:mapcreated">mapcreated</a></li><li><a href="global.html#event:treecreated">treecreated</a></li></ul><h3>Global</h3><ul><li><a href="global.html#addListener">addListener</a></li><li><a href="global.html#dispatch">dispatch</a></li><li><a href="global.html#removeListener">removeListener</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.2</a> on Wed Feb 14 2024 14:50:29 GMT+0100 (Central European Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

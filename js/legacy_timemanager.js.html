@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: legacy/timemanager.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: legacy/timemanager.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module legacy/timemanager.js
+ * @name Time manager
+ * @copyright 2023 3Liz
+ * @license MPL-2.0
+ */
+
+var lizTimemanager = function() {
+
+    lizMap.events.on({
+        'uicreated':function(evt){
+
+            // Attributes
+            var config = lizMap.config;
+            var layers = lizMap.layers;
+            var tmActive = false;
+            var tmLayersNumber = 0;
+            var tmLayerIndex = 0;
+            var tmLayersDataFetched = 0;
+            var tmLayersReady = false;
+
+            if (!('timemanagerLayers' in config))
+                return -1;
+
+            // Count layers
+            tmLayersNumber = Object.keys(lizMap.config.timemanagerLayers).length;
+
+            $('#timemanager-menu button.btn-timemanager-clear').click(function() {
+                $('#button-timemanager').click();
+            });
+
+            lizMap.events.on({
+                minidockopened: function(e) {
+                    if ( e.id == 'timemanager' ) {
+                        if (!tmActive){
+                            $('#timemanager-menu').show();
+                            activateTimemanager();
+                            tmActive = true;
+                        }
+                    }
+                },
+                minidockclosed: function(e) {
+                    if ( e.id == 'timemanager' ) {
+                        if(tmActive)
+                            deactivateTimemanager();
+                    }
+                }
+            });
+
+            // Init slider with no values
+            $("#tmSlider").slider( );
+
+            var filter = null;
+            var tmAnimationTimer;
+            var tmCurrentDate;
+            var tmStartDate = -Infinity; // lower bound of when values
+            var tmEndDate = Infinity; // upper value of when values
+
+            // Size of a frame
+            var tmTimeFrameSize = config.options['tmTimeFrameSize'];
+            // Unit for the frame size : milliseconds, seconds, minutes, hours, days, weeks, months, years
+            var tmTimeFrameType = config.options['tmTimeFrameType'];
+            // Length  for each frame (between each step)
+            var tmAnimationFrameLength = config.options['tmAnimationFrameLength']
+            if (tmAnimationFrameLength &lt; 1000)
+                tmAnimationFrameLength = 1000;
+
+            // Activate timemanager
+            /**
+             *
+             */
+            function activateTimemanager(){
+
+                // hourglass
+                //$('#loading').dialog('open');
+
+                // Get min and max timestamps from layers
+                var minTime = Infinity, maxTime = -Infinity ;
+                for (var l in config.timemanagerLayers) {
+                    var tmLayerConfig = config.timemanagerLayers[l];
+                    getDataFromLayer(tmLayerConfig, function(mi, ma){
+
+                        // Keep min and max values
+                        config.timemanagerLayers[l]['min'] = mi;
+                        config.timemanagerLayers[l]['max'] = ma;
+
+                        // Get truncated min and max
+                        var layerMinTime = moment(mi).startOf(tmTimeFrameType.slice(0, -1))
+                        var layerMaxTime = moment(ma).endOf(tmTimeFrameType.slice(0, -1))
+
+                        // Calculate global min and max
+                        if (layerMinTime &amp;&amp; layerMinTime &lt; minTime) minTime = layerMinTime;
+                        if (layerMaxTime &amp;&amp; layerMaxTime > maxTime) maxTime = layerMaxTime;
+                        tmStartDate = moment( minTime );
+                        tmEndDate = moment( maxTime );
+                        tmCurrentDate = moment( tmStartDate );
+
+                        // Set slider
+                        $('#tmCurrentValue').html(formatDatetime(tmStartDate, tmTimeFrameType));
+                        $('#tmNextValue').html(formatDatetime(tmEndDate, tmTimeFrameType));
+                        toggleNextSpan();
+                        $("#tmSlider").slider({
+                            min: tmStartDate.valueOf(),
+                            max: tmEndDate.startOf(tmTimeFrameType.slice(0, -1)).valueOf(),
+                            value: tmStartDate.valueOf()
+                        });
+                        tmLayersDataFetched+= 1;
+                        tmLayersReady = (tmLayersDataFetched == tmLayersNumber);
+                        loadTimemanager(tmLayersReady);
+
+                    });
+                }
+                // Make sure to trigger filter for slider position
+                onSliderStop();
+            }
+
+            // Deactivate Timemanager feature
+            /**
+             *
+             */
+            function deactivateTimemanager(){
+                // Stop animation
+                stopAnimation(true);
+
+                // Hide menu
+                $('#timemanager-menu').hide();
+                tmActive = false;
+
+                // Remove layers filters
+                unFilterTimeLayers();
+            }
+
+            /**
+             *
+             * @param layerConfig
+             * @param aCallback
+             */
+            function getDataFromLayer(layerConfig, aCallback){
+
+                // Get min and max timestamp from layer
+                var fieldnameContent = layerConfig.startAttribute;
+                if( layerConfig.endAttribute &amp;&amp; layerConfig.endAttribute != ''
+                &amp;&amp; layerConfig.endAttribute != layerConfig.startAttribute) {
+                    fieldnameContent+= ',' + layerConfig.endAttribute;
+                }
+
+                // Check if min and max are already in config
+                // Usefull for non SQL layers
+                if ('min_timestamp' in layerConfig &amp;&amp; layerConfig.min_timestamp &amp;&amp; layerConfig.min_timestamp != ''
+                    &amp;&amp;
+                    'max_timestamp' in layerConfig &amp;&amp; layerConfig.max_timestamp &amp;&amp; layerConfig.max_timestamp != ''
+                ) {
+                    var dmin = layerConfig.min_timestamp;
+                    var dmax = layerConfig.max_timestamp;
+                    aCallback(dmin, dmax);
+                    return true;
+                }
+
+                // Else query min and max timestamps via lizmap filter methods
+                var sdata = {
+                    request: 'getMinAndMaxValues',
+                    layerId: layerConfig.layerId,
+                    fieldname: fieldnameContent,
+                    filter: ''
+                };
+                $.get(filterConfigData.url, sdata, function(result){
+                    if( !result )
+                        return false;
+                    if( 'status' in result &amp;&amp; result['status'] == 'error' ){
+                        console.log(result.title + ': ' + result.detail);
+                        return false;
+                    }
+                    // Get min and max from feature
+                    var dmin = null;
+                    var dmax = null;
+                    for(var a in result){
+                        var feat = result[a];
+                        dmin = feat['min'];
+                        dmax = feat['max'];
+                    }
+                    // Callback
+                    aCallback(dmin, dmax);
+
+                }, 'json');
+            }
+
+
+            // Add event on slider and buttons
+            $( "#tmSlider" ).on( "slide", function( event, ui ) {
+                onSliderUpdate();
+            });
+            $( "#tmSlider" ).on( "slidestop", function( event, ui ) {
+                onSliderStop();
+            });
+            $("#tmTogglePlay").click(function(){
+                if( $(this).html() == lizDict['timemanager.toolbar.play'] ){
+                    startAnimation();
+                } else {
+                    stopAnimation();
+                }
+            });
+            $("#tmPrev").click(function(){stopAnimation(false);movePrev();});
+            $("#tmNext").click(function(){stopAnimation(false);moveNext();});
+
+
+            /**
+             *
+             * @param curDate
+             * @param timeFrameSize
+             * @param timeFrameType
+             * @param factor
+             * @param fDirection
+             */
+            function getSideDate(curDate, timeFrameSize, timeFrameType, factor, fDirection){
+                var returnVal = moment(curDate).startOf(timeFrameType);
+                var addValue = factor * tmTimeFrameSize * fDirection;
+                returnVal.add(addValue, timeFrameType);
+                return returnVal;
+            }
+
+
+            /**
+             *
+             * @param ready
+             */
+            function loadTimemanager(ready){
+                if(!ready){
+                    return true;
+                }
+                // Make sure to trigger filter for slider position
+                onSliderStop();
+            }
+
+            /**
+             *
+             */
+            function startAnimation() {
+                // Stop animation if already loaded (play/pause behaviour)
+                if (tmAnimationTimer) {
+                    stopAnimation(true);
+                }
+
+                // Change play butonn into pause
+                $('#tmTogglePlay').html(lizDict['timemanager.toolbar.pause']);
+
+                // Set current date to beginning if not set
+                if (!tmCurrentDate) {
+                    tmCurrentDate = tmStartDate;
+                }
+                var next = function() {
+                    moveNext();
+                };
+                tmAnimationTimer = window.setInterval(next, tmAnimationFrameLength);
+            }
+
+
+            // Build the filter for QGIS Server
+            /**
+             *
+             * @param layerConfig
+             * @param min_val
+             * @param max_val
+             */
+            function buildDateFilter(layerConfig, min_val, max_val){
+                var filters = [];
+
+                // Do nothing if min and max values entered equals the field min and max possible values
+                if( min_val == layerConfig['min'] &amp;&amp; max_val == layerConfig['max'] ){
+                    layerConfig['data'] = {
+                        'min_date': null,
+                        'max_date': null
+                    };
+                    layerConfig['filter'] = null;
+                    return null;
+                }
+
+                // fields
+                var startField = layerConfig.startAttribute;
+                var endField = layerConfig.endAttribute;
+                var attributeResolution = layerConfig.attributeResolution;
+
+                // min date filter
+                if(min_val &amp;&amp; Date.parse(min_val)){
+                    var f_min = '( "' + startField + '"' + " >= '" + formatDatetime(min_val, attributeResolution) + "'";
+                    if (endField &amp;&amp; endField != '' &amp;&amp; endField != startField){
+                        f_min += " OR " + ' "' + endField + '"' + " >= '" + formatDatetime(min_val, attributeResolution) + "'";
+                    }
+                    f_min += " )";
+                    filters.push(f_min);
+                }else{
+                    min_val = null;
+                }
+
+                // max date filter
+                if(max_val &amp;&amp; Date.parse(max_val)){
+                    var f_max = '( "' + startField + '"' + " &lt;= '" + formatDatetime(max_val, attributeResolution) + "'";
+                    if(endField &amp;&amp; endField != '' &amp;&amp; endField != startField) {
+                        f_max += " OR " + ' "' + endField + '"' + " &lt;= '" + formatDatetime(max_val, attributeResolution) + "'";
+                    }
+                    f_max += " )";
+                    filters.push(f_max);
+                }else{
+                    max_val = null;
+                }
+
+                var filter = null;
+                if(filters.length){
+                    filter = ' ( ';
+                    filter+= filters.join(' AND ');
+                    filter+= ' ) ';
+                }
+                layerConfig['data'] = {
+                    'min_date': min_val,
+                    'max_date': max_val
+                };
+                layerConfig['filter'] = filter;
+                //console.log(filter);
+                return filter;
+            }
+
+
+            /**
+             *
+             * @param lowerBoundary
+             * @param upperBoundary
+             */
+            function setLayersFilter(lowerBoundary, upperBoundary){
+
+                // shift upperBoundary for 1 millisecond to have strict &lt;
+                // lowerBoundary &lt;= attribute &lt; upperBoundary
+                upperBoundary.subtract(1, 'milliseconds');
+
+                // Set filter for each vector layer
+                for (var l in config.timemanagerLayers){
+                    filter = buildDateFilter(config.timemanagerLayers[l], lowerBoundary, upperBoundary);
+                    lizMap.triggerLayerFilter(l, filter);
+                }
+            }
+
+
+
+            /**
+             *
+             */
+            function moveNext(){
+                var nextLowerBoundary = getSideDate(
+                    tmCurrentDate, tmTimeFrameSize, tmTimeFrameType, 1, 1
+                );
+
+                if (nextLowerBoundary.startOf(tmTimeFrameType.slice(0, -1)) &lt;= tmEndDate.startOf(tmTimeFrameType.slice(0, -1))) {
+                    var lowerBoundary = null;
+                    var upperBoundary = null;
+                    // Change lower boundary
+                    lowerBoundary = nextLowerBoundary;
+                    // Change upper boundary
+                    upperBoundary = getSideDate(
+                        tmCurrentDate, tmTimeFrameSize, tmTimeFrameType, 2, 1
+                    );
+
+                    updateStep(lowerBoundary, upperBoundary);
+
+                } else {
+                    // Go back to first step
+                    stopAnimation(true);
+                    // Make sure to trigger filter for slider position
+                    onSliderStop();
+                }
+            }
+
+            /**
+             *
+             */
+            function movePrev() {
+                var prevLowerBoundary = getSideDate(
+                    tmCurrentDate, tmTimeFrameSize, tmTimeFrameType, 1, -1
+                );
+                if (prevLowerBoundary.startOf(tmTimeFrameType.slice(0, -1)) >= tmStartDate.startOf(tmTimeFrameType.slice(0, -1))) {
+                    var lowerBoundary = null;
+                    var upperBoundary = null;
+                    // Change lower boundary
+                    lowerBoundary = prevLowerBoundary;
+                    // Change upper boundary
+                    upperBoundary = moment(tmCurrentDate);
+
+                    updateStep(lowerBoundary, upperBoundary);
+
+                } else {
+                    stopAnimation(true);
+                    // Make sure to trigger filter for slider position
+                    onSliderStop();
+                }
+            }
+
+            // Display/hide the span containing the next time value
+            /**
+             *
+             */
+            function toggleNextSpan() {
+                var hideNextSpan = ($('#tmCurrentValue').text() == $('#tmNextValue').text());
+                $('#tmNextValue').toggle(!hideNextSpan);
+                $('#tmNextValue').prev("span").toggle(!hideNextSpan);
+            }
+
+            /**
+             *
+             * @param lowerBoundary
+             * @param upperBoundary
+             */
+            function updateStep(lowerBoundary, upperBoundary) {
+                // Set layers filter
+                setLayersFilter(lowerBoundary, upperBoundary);
+
+                // Change global values
+                tmCurrentDate = moment(lowerBoundary);
+
+                // Display
+                $('#tmCurrentValue').html(formatDatetime(tmCurrentDate, tmTimeFrameType));
+                $('#tmNextValue').html(formatDatetime(moment(upperBoundary), tmTimeFrameType));
+                toggleNextSpan();
+                $("#tmSlider").slider( "option", "value", tmCurrentDate.valueOf() );
+            }
+
+            /**
+             *
+             */
+            function onSliderUpdate() {
+                var sliderVal = $("#tmSlider").slider( "option", "value" );
+            }
+
+            /**
+             *
+             * @param sliderDate
+             * @param type
+             */
+            function setSliderStep(sliderDate, type){
+                if (type == 'seconds') sliderDate = sliderDate.set( {'millisecond' : 0} );
+                if (type == 'minutes') sliderDate = sliderDate.set( {'second' : 0});
+                if (type == 'hours') sliderDate = sliderDate.set( {'minute' : 0});
+                if (type == 'days') sliderDate = sliderDate.set( {'hour' : 0});
+                if (type == 'weeks') sliderDate = sliderDate.day(1); // Monday ( TODO : make it locale aware ?)
+                if (type == 'months') sliderDate = sliderDate.set( {'day' : 1});
+                if (type == 'years') {
+                    sliderDate.set( {'month' : 0});
+                }
+                return sliderDate;
+            }
+
+            /**
+             *
+             */
+            function onSliderStop() {
+                // Get slider data
+                var sliderVal = $("#tmSlider").slider( "option", "value" );
+                var sliderDate = moment(sliderVal);
+
+                // Get nearest step depending on frame type (hour, year, etc.)
+                sliderDate = sliderDate.startOf(tmTimeFrameType.slice(0, -1))
+
+                // set new boundaries
+                var lowerBoundary = sliderDate;
+                var upperBoundary = getSideDate(
+                    lowerBoundary, tmTimeFrameSize, tmTimeFrameType, 1, 1
+                );
+
+                updateStep(lowerBoundary, upperBoundary);
+            }
+
+
+            /**
+             *
+             * @param reset
+             */
+            function stopAnimation(reset) {
+                // Deactivate javascript timer
+                window.clearInterval(tmAnimationTimer);
+                tmAnimationTimer = null;
+
+                // Change button label to play
+                $('#tmTogglePlay').html(lizDict['timemanager.toolbar.play']);
+
+                // Reset current date to startDate if reset asked
+                if (reset === true) {
+                    tmCurrentDate = moment( tmStartDate );
+                    $('#tmCurrentValue').html(formatDatetime(tmCurrentDate, tmTimeFrameType));
+                    $("#tmSlider").slider( "option", "value", tmCurrentDate.valueOf() );
+                    var upperBoundary = getSideDate(
+                        tmCurrentDate, tmTimeFrameSize, tmTimeFrameType, 1, 1
+                    );
+                    $('#tmNextValue').html(formatDatetime(upperBoundary, tmTimeFrameType));
+                    toggleNextSpan();
+                }
+            }
+
+            /**
+             *
+             */
+            function unFilterTimeLayers() {
+                // Remove filter
+                for(var layerName in lizMap.config.timemanagerLayers){
+                    lizMap.deactivateMaplayerFilter(layerName);
+                    // Refresh plots and popups
+                    lizMap.config.layers[layerName]['request_params']['filtertoken'] = null;
+                    lizMap.events.triggerEvent("layerFilterParamChanged",
+                        {
+                            'featureType': layerName,
+                            'filter': null,
+                            'updateDrawing': false
+                        }
+                    );
+                }
+            }
+
+            /**
+             *
+             * @param mytime
+             * @param timeResolution
+             */
+            function formatDatetime(mytime, timeResolution){
+                var myDate = moment(mytime);
+                var dString = null;
+                switch(timeResolution){
+                    case 'milliseconds': dString = 'YYYY-MM-DD HH:mm:ss';break;
+                    case 'seconds': dString = 'YYYY-MM-DD HH:mm:ss';break;
+                    case 'minutes': dString = 'YYYY-MM-DD HH:mm:00';break;
+                    case 'hours': dString = 'YYYY-MM-DD HH:00';break;
+                    case 'days': dString = 'YYYY-MM-DD';break;
+                    case 'weeks': dString = 'YYYY-MM-DD';break;
+                    case 'months': dString = 'YYYY-MM';break;
+                    case 'years': dString = 'YYYY';break;
+                }
+                return myDate.format(dString);
+            }
+
+        }
+    });
+
+
+}();
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector.html">ActionSelector</a></li><li><a href="module-Atlas.html">Atlas</a></li><li><a href="module-AttributeTable.html">AttributeTable</a></li><li><a href="module-Attribution.html">Attribution</a></li><li><a href="module-BaseLayer.html">BaseLayer</a></li><li><a href="module-BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseObject.html">BaseObject</a></li><li><a href="module-BottomDock.html">BottomDock</a></li><li><a href="module-Config.html">Config</a></li><li><a href="module-Constants.html">Constants</a></li><li><a href="module-Converters.html">Converters</a></li><li><a href="module-Dataviz.html">Dataviz</a></li><li><a href="module-Digitizing.html">Digitizing</a></li><li><a href="module-Draw.html">Draw</a></li><li><a href="module-Edition.html">Edition</a></li><li><a href="module-Enums.html">Enums</a></li><li><a href="module-Errors.html">Errors</a></li><li><a href="module-Extent.html">Extent</a></li><li><a href="module-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-Filter.html">Filter</a></li><li><a href="module-FormFilter.html">FormFilter</a></li><li><a href="module-FullScreen.html">FullScreen</a></li><li><a href="module-Geolocation.html">Geolocation</a></li><li><a href="module-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Index.html">Index</a></li><li><a href="module-Layer.html">Layer</a></li><li><a href="module-LayerState.html">LayerState</a></li><li><a href="module-LayerTree.html">LayerTree</a></li><li><a href="module-LayerTreeState.html">LayerTreeState</a></li><li><a href="module-LayersOrder.html">LayersOrder</a></li><li><a href="module-Legend.html">Legend</a></li><li><a href="module-Locate.html">Locate</a></li><li><a href="module-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.html">MapState</a></li><li><a href="module-Mask.html">Mask</a></li><li><a href="module-Metadata.html">Metadata</a></li><li><a href="module-MousePosition.html">MousePosition</a></li><li><a href="module-Options.html">Options</a></li><li><a href="module-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom.html">PasteGeom</a></li><li><a href="module-Permalink.html">Permalink</a></li><li><a href="module-Popup.html">Popup</a></li><li><a href="module-Print.html">Print</a></li><li><a href="module-PrintTemplate.html">PrintTemplate</a></li><li><a href="module-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom.html">ReverseGeom</a></li><li><a href="module-Scaleline.html">Scaleline</a></li><li><a href="module-Search.html">Search</a></li><li><a href="module-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping.html">Snapping</a></li><li><a href="module-State.html">State</a></li><li><a href="module-Switch%2520layer%2520actions.html">Switch layer actions</a></li><li><a href="module-SymbologyAction.html">SymbologyAction</a></li><li><a href="module-SymbologyState.html">SymbologyState</a></li><li><a href="module-Theme.html">Theme</a></li><li><a href="module-Time%2520manager.html">Time manager</a></li><li><a href="module-TimeManager.html">TimeManager</a></li><li><a href="module-Tools.html">Tools</a></li><li><a href="module-Tooltip.html">Tooltip</a></li><li><a href="module-Treeview.html">Treeview</a></li><li><a href="module-Utils.html">Utils</a></li><li><a href="module-View.html">View</a></li><li><a href="module-WFS.html">WFS</a></li><li><a href="module-WMS.html">WMS</a></li><li><a href="module-maps.html">maps</a></li></ul><h3>Classes</h3><ul><li><a href="EventDispatcher.html">EventDispatcher</a></li><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector-ActionSelector.html">ActionSelector</a></li><li><a href="module-Action-Action.html">Action</a></li><li><a href="module-AttributeTable.AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-AttributeTable.AttributeLayersConfig.html">AttributeLayersConfig</a></li><li><a href="module-AttributeTable-AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-Attribution.AttributionConfig.html">AttributionConfig</a></li><li><a href="module-Attribution-AttributionConfig.html">AttributionConfig</a></li><li><a href="module-BaseLayer.BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseLayer.BaseLayersConfig.html">BaseLayersConfig</a></li><li><a href="module-BaseLayer.BingBaseLayerConfig.html">BingBaseLayerConfig</a></li><li><a href="module-BaseLayer.EmptyBaseLayerConfig.html">EmptyBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmsBaseLayerConfig.html">WmsBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmtsBaseLayerConfig.html">WmtsBaseLayerConfig</a></li><li><a href="module-BaseLayer.XyzBaseLayerConfig.html">XyzBaseLayerConfig</a></li><li><a href="module-BaseLayerState.BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayerState.BaseLayersState.html">BaseLayersState</a></li><li><a href="module-BaseLayerState.BingBaseLayerState.html">BingBaseLayerState</a></li><li><a href="module-BaseLayerState.EmptyBaseLayerState.html">EmptyBaseLayerState</a></li><li><a href="module-BaseLayerState.WmsBaseLayerState.html">WmsBaseLayerState</a></li><li><a href="module-BaseLayerState.WmtsBaseLayerState.html">WmtsBaseLayerState</a></li><li><a href="module-BaseLayerState.XyzBaseLayerState.html">XyzBaseLayerState</a></li><li><a href="module-BaseLayers-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseLayer-BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectConfig.html">BaseObjectConfig</a></li><li><a href="module-BaseObject.BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectLayersConfig.html">BaseObjectLayersConfig</a></li><li><a href="module-BaseObject-BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-Config.Config.html">Config</a></li><li><a href="module-Config-Config.html">Config</a></li><li><a href="module-Dataviz.DatavizElementConfig.html">DatavizElementConfig</a></li><li><a href="module-Dataviz.DatavizLayersConfig.html">DatavizLayersConfig</a></li><li><a href="module-Dataviz.DatavizOptionsConfig.html">DatavizOptionsConfig</a></li><li><a href="module-Dataviz.DatavizPlotConfig.html">DatavizPlotConfig</a></li><li><a href="module-Dataviz.DatavizTraceConfig.html">DatavizTraceConfig</a></li><li><a href="module-Digitizing-Digitizing.html">Digitizing</a></li><li><a href="module-Draw-Draw.html">Draw</a></li><li><a href="module-Edition.EditionCapabilitiesConfig.html">EditionCapabilitiesConfig</a></li><li><a href="module-Edition.EditionLayerConfig.html">EditionLayerConfig</a></li><li><a href="module-Edition.EditionLayersConfig.html">EditionLayersConfig</a></li><li><a href="module-Edition-Edition.html">Edition</a></li><li><a href="module-Errors-ConversionError.html">ConversionError</a></li><li><a href="module-Errors-HttpError.html">HttpError</a></li><li><a href="module-Errors-PropertyRequiredError.html">PropertyRequiredError</a></li><li><a href="module-Errors-ValidationError.html">ValidationError</a></li><li><a href="module-Extent.Extent.html">Extent</a></li><li><a href="module-FeatureStorage-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-FormFilter.FormFilterConfig.html">FormFilterConfig</a></li><li><a href="module-FormFilter.FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FormFilter-FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FullScreen-FullScreen.html">FullScreen</a></li><li><a href="module-GeolocationSurvey-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Geolocation-Geolocation.html">Geolocation</a></li><li><a href="module-Layer.LayerConfig.html">LayerConfig</a></li><li><a href="module-Layer.LayersConfig.html">LayersConfig</a></li><li><a href="module-LayerState.LayerGroupState.html">LayerGroupState</a></li><li><a href="module-LayerState.LayerItemState.html">LayerItemState</a></li><li><a href="module-LayerState.LayerLayerState.html">LayerLayerState</a></li><li><a href="module-LayerState.LayerRasterState.html">LayerRasterState</a></li><li><a href="module-LayerState.LayerVectorState.html">LayerVectorState</a></li><li><a href="module-LayerState.LayersAndGroupsCollection.html">LayersAndGroupsCollection</a></li><li><a href="module-LayerTree.LayerBoundingBoxConfig.html">LayerBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerGeographicBoundingBoxConfig.html">LayerGeographicBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerStyleConfig.html">LayerStyleConfig</a></li><li><a href="module-LayerTree.LayerTreeGroupConfig.html">LayerTreeGroupConfig</a></li><li><a href="module-LayerTree.LayerTreeItemConfig.html">LayerTreeItemConfig</a></li><li><a href="module-LayerTree.LayerTreeLayerConfig.html">LayerTreeLayerConfig</a></li><li><a href="module-LayerTreeState.LayerTreeGroupState.html">LayerTreeGroupState</a></li><li><a href="module-LayerTreeState.LayerTreeItemState.html">LayerTreeItemState</a></li><li><a href="module-LayerTreeState.LayerTreeLayerState.html">LayerTreeLayerState</a></li><li><a href="module-Legend-Legend.html">Legend</a></li><li><a href="module-Locate.LocateByLayerConfig.html">LocateByLayerConfig</a></li><li><a href="module-Locate.LocateLayerConfig.html">LocateLayerConfig</a></li><li><a href="module-MGRS-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.MapGroupState.html">MapGroupState</a></li><li><a href="module-MapLayerState.MapItemState.html">MapItemState</a></li><li><a href="module-MapLayerState.MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.MapState.html">MapState</a></li><li><a href="module-Mask-Mask.html">Mask</a></li><li><a href="module-Metadata.MetadataConfig.html">MetadataConfig</a></li><li><a href="module-MousePosition-MousePosition.html">MousePosition</a></li><li><a href="module-Options.OptionsConfig.html">OptionsConfig</a></li><li><a href="module-OverviewMap-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom-pasteGeom.html">pasteGeom</a></li><li><a href="module-Permalink-Permalink.html">Permalink</a></li><li><a href="module-Popup-Popup.html">Popup</a></li><li><a href="module-PrintTemplate.PrintAtlasConfig.html">PrintAtlasConfig</a></li><li><a href="module-PrintTemplate.PrintLabelConfig.html">PrintLabelConfig</a></li><li><a href="module-PrintTemplate.PrintMapConfig.html">PrintMapConfig</a></li><li><a href="module-PrintTemplate.PrintTemplateConfig.html">PrintTemplateConfig</a></li><li><a href="module-Print-Print.html">Print</a></li><li><a href="module-ProxyEvents-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom-reverseGeom.html">reverseGeom</a></li><li><a href="module-Scaleline-Scaleline.html">Scaleline</a></li><li><a href="module-Search-Search.html">Search</a></li><li><a href="module-SelectionInvert-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping-Snapping.html">Snapping</a></li><li><a href="module-State.State.html">State</a></li><li><a href="module-State-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-State-SelectionTool.html">SelectionTool</a></li><li><a href="module-State-State.html">State</a></li><li><a href="module-SymbologyState.BaseIconSymbology.html">BaseIconSymbology</a></li><li><a href="module-SymbologyState.BaseObjectSymbology.html">BaseObjectSymbology</a></li><li><a href="module-SymbologyState.BaseSymbolsSymbology.html">BaseSymbolsSymbology</a></li><li><a href="module-SymbologyState.LayerGroupSymbology.html">LayerGroupSymbology</a></li><li><a href="module-SymbologyState.LayerIconSymbology.html">LayerIconSymbology</a></li><li><a href="module-SymbologyState.LayerSymbolsSymbology.html">LayerSymbolsSymbology</a></li><li><a href="module-SymbologyState.SymbolIconSymbology.html">SymbolIconSymbology</a></li><li><a href="module-SymbologyState.SymbolRuleSymbology.html">SymbolRuleSymbology</a></li><li><a href="module-Theme.LayerThemeConfig.html">LayerThemeConfig</a></li><li><a href="module-Theme.ThemeConfig.html">ThemeConfig</a></li><li><a href="module-Theme.ThemesConfig.html">ThemesConfig</a></li><li><a href="module-TimeManager.TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-TimeManager.TimeManagerLayersConfig.html">TimeManagerLayersConfig</a></li><li><a href="module-TimeManager-TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayerConfig.html">TooltipLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayersConfig.html">TooltipLayersConfig</a></li><li><a href="module-Treeview-Treeview.html">Treeview</a></li><li><a href="module-Utils-Utils.html">Utils</a></li><li><a href="module-WFS-WFS.html">WFS</a></li><li><a href="module-WMS-WMS.html">WMS</a></li><li><a href="module-maps-map.html">map</a></li></ul><h3>Events</h3><ul><li><a href="module-Action.html#~event:actionResultReceived">actionResultReceived</a></li><li><a href="global.html#event:beforetreecreated">beforetreecreated</a></li><li><a href="global.html#event:layersadded">layersadded</a></li><li><a href="global.html#event:mapcreated">mapcreated</a></li><li><a href="global.html#event:treecreated">treecreated</a></li></ul><h3>Global</h3><ul><li><a href="global.html#addListener">addListener</a></li><li><a href="global.html#dispatch">dispatch</a></li><li><a href="global.html#removeListener">removeListener</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.2</a> on Wed Feb 14 2024 14:50:29 GMT+0100 (Central European Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

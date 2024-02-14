@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: modules/Geolocation.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: modules/Geolocation.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module modules/Geolocation.js
+ * @name Geolocation
+ * @copyright 2023 3Liz
+ * @license MPL-2.0
+ */
+import { mainLizmap, mainEventDispatcher } from '../modules/Globals.js';
+import olGeolocation from 'ol/Geolocation.js';
+import { transform } from 'ol/proj.js';
+import { Vector as VectorSource } from 'ol/source.js';
+import { Vector as VectorLayer } from 'ol/layer.js';
+import Point from 'ol/geom/Point.js';
+import Circle from 'ol/geom/Circle.js';
+import Feature from 'ol/Feature.js';
+
+/**
+ * @class
+ * @name Geolocation
+ */
+export default class Geolocation {
+
+    constructor() {
+        const color = 'rgb(3, 149, 214)';
+        const fillColor = 'rgba(3, 149, 214, 0.1)';
+        const strokeWidth = 1;
+        this._geolocationLayer = new VectorLayer({
+            source: new VectorSource({
+                wrapX: false
+            }),
+            style: {
+                'circle-radius': 3,
+                'circle-stroke-color': color,
+                'circle-stroke-width': strokeWidth,
+                'circle-fill-color': color,
+                'stroke-color': color,
+                'stroke-width': strokeWidth,
+                'fill-color': fillColor,
+            }
+        });
+
+        mainLizmap.map.addLayer(this._geolocationLayer);
+
+        this._firstGeolocation = true;
+        this._isBind = false;
+        this._bindIntervalID = 0;
+        this._bindIntervalInSecond = 10;
+        this._isLinkedToEdition = false;
+
+        this._geolocation = new olGeolocation({
+            // `enableHighAccuracy` must be set to true to have the heading value
+            trackingOptions: {
+                enableHighAccuracy: true
+            },
+            projection: mainLizmap.projection
+        });
+
+        this._geolocation.on('change:position', () => {
+            const coordinates = this._geolocation.getPosition();
+            this.moveGeolocationPointAndCircle(coordinates);
+
+            mainEventDispatcher.dispatch('geolocation.position');
+        });
+
+        this._geolocation.on('change:tracking', () => {
+            // FIXME : later we'll need an object listening to 'geolocation.isTracking' event and setting visibility accordingly
+            const geolocationLayer = mainLizmap._lizmap3.map.getLayersByName('geolocation')[0];
+            if (geolocationLayer) {
+                geolocationLayer.setVisibility(this.isTracking);
+            }
+
+            if(this.isBind){
+                if (this.isTracking) {
+                    this._startBindInterval();
+                } else {
+                    this._stopBindInterval();
+                }
+            }
+
+            mainEventDispatcher.dispatch('geolocation.isTracking');
+        });
+
+        this._geolocation.on('change:accuracy', () => {
+            mainEventDispatcher.dispatch('geolocation.accuracy');
+        });
+
+        this._geolocation.on('change:accuracyGeometry', () => {
+            // Zoom on accuracy geometry extent when geolocation is activated for the first time
+            if (this._firstGeolocation) {
+                mainLizmap.extent = this._geolocation.getAccuracyGeometry().getExtent();
+                this.center();
+                this._firstGeolocation = false;
+
+                mainEventDispatcher.dispatch('geolocation.firstGeolocation');
+            }
+        });
+
+        // Handle geolocation error
+        this._geolocation.on('error', error => {
+            mainLizmap.displayMessage(error.message, 'error', true);
+        });
+    }
+
+    center() {
+        mainLizmap.center = this._geolocation.getPosition();
+    }
+
+    toggleBind() {
+        this.isBind = !this._isBind;
+
+        // Center when binding
+        if (this.isBind) {
+            this.center();
+
+            this._startBindInterval();
+        }else{
+            this._stopBindInterval();
+        }
+    }
+
+    _startBindInterval(){
+        // First clear previous interval
+        this._stopBindInterval();
+
+        // Then set new interval
+        this._bindIntervalID = window.setInterval(() => {
+            this.center();
+        }, this.bindIntervalInSecond * 1000);
+    }
+
+    _stopBindInterval(){
+        window.clearInterval(this._bindIntervalID);
+    }
+
+    toggleTracking() {
+        this.isTracking = !this._geolocation.getTracking();
+    }
+
+    getPositionInCRS(crs) {
+        if (crs === 'ESPG:4326') {
+            return this.position;
+        } else {
+            const position = this._geolocation.getPosition();
+            return transform(position, mainLizmap.projection, crs);
+        }
+    }
+
+    get firstGeolocation() {
+        return this._firstGeolocation;
+    }
+
+    // Get position in GPS coordinates (ESPG:4326) with 6 decimals
+    get position() {
+        const position = this._geolocation.getPosition();
+        if (position) {
+            const position4326 = transform(position, mainLizmap.projection, 'EPSG:4326');
+            return [parseFloat(position4326[0].toFixed(6)), parseFloat(position4326[1].toFixed(6))];
+        }
+        return undefined;
+    }
+
+    get accuracy() {
+        if (this._geolocation.getAccuracy()) {
+            return parseFloat(this._geolocation.getAccuracy().toFixed(3));
+        }
+        return undefined;
+    }
+
+    get isTracking() {
+        return this._geolocation.getTracking();
+    }
+
+    /**
+     * @param {boolean} isTracking - Enable tracking.
+     */
+    set isTracking(isTracking) {
+        this._geolocation.setTracking(isTracking);
+    }
+
+    get isBind() {
+        return this._isBind;
+    }
+
+    /**
+     * @param {boolean} isBind - Enable map view always centered on current position.
+     */
+    set isBind(isBind) {
+        this._isBind = isBind;
+
+        mainEventDispatcher.dispatch('geolocation.isBind');
+    }
+
+    get isLinkedToEdition() {
+        return this._isLinkedToEdition;
+    }
+
+    /**
+     * @param {boolean} isLinkedToEdition - Link edition and geolocation to draw features based on GPS position
+     */
+    set isLinkedToEdition(isLinkedToEdition) {
+        this._isLinkedToEdition = isLinkedToEdition;
+
+        mainEventDispatcher.dispatch('geolocation.isLinkedToEdition');
+    }
+
+    get bindIntervalInSecond(){
+        return this._bindIntervalInSecond;
+    }
+
+    /**
+     * @param  {number} interval - Interval in second
+     */
+    set bindIntervalInSecond(interval) {
+        this._bindIntervalInSecond = interval;
+
+        this._startBindInterval();
+    }
+
+    moveGeolocationPointAndCircle(coordinates) {
+        const positionFeature = new Feature({
+            geometry: new Point(coordinates)
+        });
+
+        const accuracyFeature = new Feature({
+            geometry: new Circle(coordinates, this._geolocation.getAccuracy() / 2)
+        });
+
+        this._geolocationLayer.getSource().clear();
+        this._geolocationLayer.getSource().addFeatures([positionFeature, accuracyFeature]);
+    }
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector.html">ActionSelector</a></li><li><a href="module-Atlas.html">Atlas</a></li><li><a href="module-AttributeTable.html">AttributeTable</a></li><li><a href="module-Attribution.html">Attribution</a></li><li><a href="module-BaseLayer.html">BaseLayer</a></li><li><a href="module-BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseObject.html">BaseObject</a></li><li><a href="module-BottomDock.html">BottomDock</a></li><li><a href="module-Config.html">Config</a></li><li><a href="module-Constants.html">Constants</a></li><li><a href="module-Converters.html">Converters</a></li><li><a href="module-Dataviz.html">Dataviz</a></li><li><a href="module-Digitizing.html">Digitizing</a></li><li><a href="module-Draw.html">Draw</a></li><li><a href="module-Edition.html">Edition</a></li><li><a href="module-Enums.html">Enums</a></li><li><a href="module-Errors.html">Errors</a></li><li><a href="module-Extent.html">Extent</a></li><li><a href="module-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-Filter.html">Filter</a></li><li><a href="module-FormFilter.html">FormFilter</a></li><li><a href="module-FullScreen.html">FullScreen</a></li><li><a href="module-Geolocation.html">Geolocation</a></li><li><a href="module-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Index.html">Index</a></li><li><a href="module-Layer.html">Layer</a></li><li><a href="module-LayerState.html">LayerState</a></li><li><a href="module-LayerTree.html">LayerTree</a></li><li><a href="module-LayerTreeState.html">LayerTreeState</a></li><li><a href="module-LayersOrder.html">LayersOrder</a></li><li><a href="module-Legend.html">Legend</a></li><li><a href="module-Locate.html">Locate</a></li><li><a href="module-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.html">MapState</a></li><li><a href="module-Mask.html">Mask</a></li><li><a href="module-Metadata.html">Metadata</a></li><li><a href="module-MousePosition.html">MousePosition</a></li><li><a href="module-Options.html">Options</a></li><li><a href="module-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom.html">PasteGeom</a></li><li><a href="module-Permalink.html">Permalink</a></li><li><a href="module-Popup.html">Popup</a></li><li><a href="module-Print.html">Print</a></li><li><a href="module-PrintTemplate.html">PrintTemplate</a></li><li><a href="module-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom.html">ReverseGeom</a></li><li><a href="module-Scaleline.html">Scaleline</a></li><li><a href="module-Search.html">Search</a></li><li><a href="module-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping.html">Snapping</a></li><li><a href="module-State.html">State</a></li><li><a href="module-Switch%2520layer%2520actions.html">Switch layer actions</a></li><li><a href="module-SymbologyAction.html">SymbologyAction</a></li><li><a href="module-SymbologyState.html">SymbologyState</a></li><li><a href="module-Theme.html">Theme</a></li><li><a href="module-Time%2520manager.html">Time manager</a></li><li><a href="module-TimeManager.html">TimeManager</a></li><li><a href="module-Tools.html">Tools</a></li><li><a href="module-Tooltip.html">Tooltip</a></li><li><a href="module-Treeview.html">Treeview</a></li><li><a href="module-Utils.html">Utils</a></li><li><a href="module-View.html">View</a></li><li><a href="module-WFS.html">WFS</a></li><li><a href="module-WMS.html">WMS</a></li><li><a href="module-maps.html">maps</a></li></ul><h3>Classes</h3><ul><li><a href="EventDispatcher.html">EventDispatcher</a></li><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector-ActionSelector.html">ActionSelector</a></li><li><a href="module-Action-Action.html">Action</a></li><li><a href="module-AttributeTable.AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-AttributeTable.AttributeLayersConfig.html">AttributeLayersConfig</a></li><li><a href="module-AttributeTable-AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-Attribution.AttributionConfig.html">AttributionConfig</a></li><li><a href="module-Attribution-AttributionConfig.html">AttributionConfig</a></li><li><a href="module-BaseLayer.BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseLayer.BaseLayersConfig.html">BaseLayersConfig</a></li><li><a href="module-BaseLayer.BingBaseLayerConfig.html">BingBaseLayerConfig</a></li><li><a href="module-BaseLayer.EmptyBaseLayerConfig.html">EmptyBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmsBaseLayerConfig.html">WmsBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmtsBaseLayerConfig.html">WmtsBaseLayerConfig</a></li><li><a href="module-BaseLayer.XyzBaseLayerConfig.html">XyzBaseLayerConfig</a></li><li><a href="module-BaseLayerState.BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayerState.BaseLayersState.html">BaseLayersState</a></li><li><a href="module-BaseLayerState.BingBaseLayerState.html">BingBaseLayerState</a></li><li><a href="module-BaseLayerState.EmptyBaseLayerState.html">EmptyBaseLayerState</a></li><li><a href="module-BaseLayerState.WmsBaseLayerState.html">WmsBaseLayerState</a></li><li><a href="module-BaseLayerState.WmtsBaseLayerState.html">WmtsBaseLayerState</a></li><li><a href="module-BaseLayerState.XyzBaseLayerState.html">XyzBaseLayerState</a></li><li><a href="module-BaseLayers-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseLayer-BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectConfig.html">BaseObjectConfig</a></li><li><a href="module-BaseObject.BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectLayersConfig.html">BaseObjectLayersConfig</a></li><li><a href="module-BaseObject-BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-Config.Config.html">Config</a></li><li><a href="module-Config-Config.html">Config</a></li><li><a href="module-Dataviz.DatavizElementConfig.html">DatavizElementConfig</a></li><li><a href="module-Dataviz.DatavizLayersConfig.html">DatavizLayersConfig</a></li><li><a href="module-Dataviz.DatavizOptionsConfig.html">DatavizOptionsConfig</a></li><li><a href="module-Dataviz.DatavizPlotConfig.html">DatavizPlotConfig</a></li><li><a href="module-Dataviz.DatavizTraceConfig.html">DatavizTraceConfig</a></li><li><a href="module-Digitizing-Digitizing.html">Digitizing</a></li><li><a href="module-Draw-Draw.html">Draw</a></li><li><a href="module-Edition.EditionCapabilitiesConfig.html">EditionCapabilitiesConfig</a></li><li><a href="module-Edition.EditionLayerConfig.html">EditionLayerConfig</a></li><li><a href="module-Edition.EditionLayersConfig.html">EditionLayersConfig</a></li><li><a href="module-Edition-Edition.html">Edition</a></li><li><a href="module-Errors-ConversionError.html">ConversionError</a></li><li><a href="module-Errors-HttpError.html">HttpError</a></li><li><a href="module-Errors-PropertyRequiredError.html">PropertyRequiredError</a></li><li><a href="module-Errors-ValidationError.html">ValidationError</a></li><li><a href="module-Extent.Extent.html">Extent</a></li><li><a href="module-FeatureStorage-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-FormFilter.FormFilterConfig.html">FormFilterConfig</a></li><li><a href="module-FormFilter.FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FormFilter-FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FullScreen-FullScreen.html">FullScreen</a></li><li><a href="module-GeolocationSurvey-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Geolocation-Geolocation.html">Geolocation</a></li><li><a href="module-Layer.LayerConfig.html">LayerConfig</a></li><li><a href="module-Layer.LayersConfig.html">LayersConfig</a></li><li><a href="module-LayerState.LayerGroupState.html">LayerGroupState</a></li><li><a href="module-LayerState.LayerItemState.html">LayerItemState</a></li><li><a href="module-LayerState.LayerLayerState.html">LayerLayerState</a></li><li><a href="module-LayerState.LayerRasterState.html">LayerRasterState</a></li><li><a href="module-LayerState.LayerVectorState.html">LayerVectorState</a></li><li><a href="module-LayerState.LayersAndGroupsCollection.html">LayersAndGroupsCollection</a></li><li><a href="module-LayerTree.LayerBoundingBoxConfig.html">LayerBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerGeographicBoundingBoxConfig.html">LayerGeographicBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerStyleConfig.html">LayerStyleConfig</a></li><li><a href="module-LayerTree.LayerTreeGroupConfig.html">LayerTreeGroupConfig</a></li><li><a href="module-LayerTree.LayerTreeItemConfig.html">LayerTreeItemConfig</a></li><li><a href="module-LayerTree.LayerTreeLayerConfig.html">LayerTreeLayerConfig</a></li><li><a href="module-LayerTreeState.LayerTreeGroupState.html">LayerTreeGroupState</a></li><li><a href="module-LayerTreeState.LayerTreeItemState.html">LayerTreeItemState</a></li><li><a href="module-LayerTreeState.LayerTreeLayerState.html">LayerTreeLayerState</a></li><li><a href="module-Legend-Legend.html">Legend</a></li><li><a href="module-Locate.LocateByLayerConfig.html">LocateByLayerConfig</a></li><li><a href="module-Locate.LocateLayerConfig.html">LocateLayerConfig</a></li><li><a href="module-MGRS-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.MapGroupState.html">MapGroupState</a></li><li><a href="module-MapLayerState.MapItemState.html">MapItemState</a></li><li><a href="module-MapLayerState.MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.MapState.html">MapState</a></li><li><a href="module-Mask-Mask.html">Mask</a></li><li><a href="module-Metadata.MetadataConfig.html">MetadataConfig</a></li><li><a href="module-MousePosition-MousePosition.html">MousePosition</a></li><li><a href="module-Options.OptionsConfig.html">OptionsConfig</a></li><li><a href="module-OverviewMap-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom-pasteGeom.html">pasteGeom</a></li><li><a href="module-Permalink-Permalink.html">Permalink</a></li><li><a href="module-Popup-Popup.html">Popup</a></li><li><a href="module-PrintTemplate.PrintAtlasConfig.html">PrintAtlasConfig</a></li><li><a href="module-PrintTemplate.PrintLabelConfig.html">PrintLabelConfig</a></li><li><a href="module-PrintTemplate.PrintMapConfig.html">PrintMapConfig</a></li><li><a href="module-PrintTemplate.PrintTemplateConfig.html">PrintTemplateConfig</a></li><li><a href="module-Print-Print.html">Print</a></li><li><a href="module-ProxyEvents-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom-reverseGeom.html">reverseGeom</a></li><li><a href="module-Scaleline-Scaleline.html">Scaleline</a></li><li><a href="module-Search-Search.html">Search</a></li><li><a href="module-SelectionInvert-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping-Snapping.html">Snapping</a></li><li><a href="module-State.State.html">State</a></li><li><a href="module-State-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-State-SelectionTool.html">SelectionTool</a></li><li><a href="module-State-State.html">State</a></li><li><a href="module-SymbologyState.BaseIconSymbology.html">BaseIconSymbology</a></li><li><a href="module-SymbologyState.BaseObjectSymbology.html">BaseObjectSymbology</a></li><li><a href="module-SymbologyState.BaseSymbolsSymbology.html">BaseSymbolsSymbology</a></li><li><a href="module-SymbologyState.LayerGroupSymbology.html">LayerGroupSymbology</a></li><li><a href="module-SymbologyState.LayerIconSymbology.html">LayerIconSymbology</a></li><li><a href="module-SymbologyState.LayerSymbolsSymbology.html">LayerSymbolsSymbology</a></li><li><a href="module-SymbologyState.SymbolIconSymbology.html">SymbolIconSymbology</a></li><li><a href="module-SymbologyState.SymbolRuleSymbology.html">SymbolRuleSymbology</a></li><li><a href="module-Theme.LayerThemeConfig.html">LayerThemeConfig</a></li><li><a href="module-Theme.ThemeConfig.html">ThemeConfig</a></li><li><a href="module-Theme.ThemesConfig.html">ThemesConfig</a></li><li><a href="module-TimeManager.TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-TimeManager.TimeManagerLayersConfig.html">TimeManagerLayersConfig</a></li><li><a href="module-TimeManager-TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayerConfig.html">TooltipLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayersConfig.html">TooltipLayersConfig</a></li><li><a href="module-Treeview-Treeview.html">Treeview</a></li><li><a href="module-Utils-Utils.html">Utils</a></li><li><a href="module-WFS-WFS.html">WFS</a></li><li><a href="module-WMS-WMS.html">WMS</a></li><li><a href="module-maps-map.html">map</a></li></ul><h3>Events</h3><ul><li><a href="module-Action.html#~event:actionResultReceived">actionResultReceived</a></li><li><a href="global.html#event:beforetreecreated">beforetreecreated</a></li><li><a href="global.html#event:layersadded">layersadded</a></li><li><a href="global.html#event:mapcreated">mapcreated</a></li><li><a href="global.html#event:treecreated">treecreated</a></li></ul><h3>Global</h3><ul><li><a href="global.html#addListener">addListener</a></li><li><a href="global.html#dispatch">dispatch</a></li><li><a href="global.html#removeListener">removeListener</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.2</a> on Wed Feb 14 2024 14:50:29 GMT+0100 (Central European Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

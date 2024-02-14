@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<phpunit bootstrap="bootstrap.php">
+  <testsuites>
+    <testsuite name="lizmap">
+      <directory>edition/</directory>
+      <directory>classes/</directory>
+    </testsuite>
+  </testsuites>
+</phpunit>

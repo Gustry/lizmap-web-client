@@ -1,0 +1,58 @@
+{
+    "pkuid": {
+        "editAttr": {
+            "Editable": true,
+            "fieldAlias": ""
+        },
+        "fieldEditType": "Hidden",
+        "markup": "hidden",
+        "rendererCategories": {
+            "3": "difficult",
+            "1": "easy",
+            "2": "normal"
+        }
+    },
+    "label": {
+        "editAttr": {
+            "IsMultiline": false,
+            "UseHtml": false,
+            "Editable": true,
+            "fieldAlias": ""
+        },
+        "fieldEditType": "TextEdit",
+        "markup": "input",
+        "rendererCategories": {
+            "3": "difficult",
+            "1": "easy",
+            "2": "normal"
+        }
+    },
+    "description": {
+        "editAttr": {
+            "IsMultiline": true,
+            "UseHtml": false,
+            "Editable": true,
+            "fieldAlias": ""
+        },
+        "fieldEditType": "TextEdit",
+        "markup": "textarea",
+        "rendererCategories": {
+            "3": "difficult",
+            "1": "easy",
+            "2": "normal"
+        }
+    },
+    "difficulty": {
+        "editAttr": {
+            "Editable": true,
+            "fieldAlias": ""
+        },
+        "fieldEditType": "Classification",
+        "markup": "menulist",
+        "rendererCategories": {
+            "3": "difficult",
+            "1": "easy",
+            "2": "normal"
+        }
+    }
+}

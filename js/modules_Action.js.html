@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: modules/Action.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: modules/Action.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module modules/Action.js
+ * @name Action
+ * @copyright 2023 3Liz
+ * @author DHONT René-Luc
+ * @license MPL-2.0
+ */
+
+import { mainLizmap } from '../modules/Globals.js';
+import { Vector as VectorSource } from 'ol/source.js';
+import { Vector as VectorLayer } from 'ol/layer.js';
+import GeoJSON from 'ol/format/GeoJSON.js';
+
+/**
+ * @class
+ * @name Action
+ */
+export default class Action {
+
+    /**
+     * @enum {string} Scopes - List of available scopes for the actions
+     */
+    Scopes = {
+        Project: "project",
+        Layer: "layer",
+        Feature: "feature"
+    }
+
+    /**
+     * @enum {string} Callbacks - List of available callbacks for the actions
+     */
+    CallbackMethods = {
+        Redraw: "redraw",
+        Select: "select",
+        Zoom: "zoom"
+    }
+
+    /**
+     * @boolean If the project has actions
+     */
+    hasActions = false;
+
+    /**
+     * @string Unique ID of an action object
+     * We allow only one active action at a time
+     */
+    ACTIVE_LIZMAP_ACTION = null;
+
+    /**
+     * OpenLayers vector layer to draw the action results
+     */
+    actionLayer = null;
+
+    /**
+     * Build the lizmap Action instance
+     */
+    constructor() {
+
+        this.hasActions = true;
+        if (typeof actionConfig === 'undefined') {
+            this.hasActions = false;
+        }
+
+        if (this.hasActions) {
+
+            // Add an OpenLayers layer to show &amp; use the geometries returned by an action
+            this.createActionMapLayer();
+
+            // Get the list of used scopes
+            let usedScopes = [];
+            for (let i in actionConfig) {
+                let item = actionConfig[i];
+                if (!usedScopes.includes(item['scope'])) {
+                    usedScopes.push(item['scope']);
+                }
+            }
+
+            // Hide the action dock if no action has the projet scope
+            if (!usedScopes.includes(this.Scopes.Project)) {
+                let actionMenu = document.querySelector('#mapmenu li.action');
+                if (actionMenu) {
+                    actionMenu.style.display = "none";
+                }
+            }
+
+            // Close the windows via the action-close button
+            let closeDockButton = document.getElementById('action-close');
+            if (closeDockButton) {
+                closeDockButton.addEventListener('click', event => {
+                    let actionMenu = document.querySelector('#mapmenu li.action.active a');
+                    if (actionMenu) {
+                        actionMenu.click();
+                    }
+                });
+            }
+
+            // React on the main Lizmap events
+            mainLizmap.lizmap3.events.on({
+
+                // The popup has been displayed
+                // We need to add the buttons for the action with a 'feature' scope
+                // corresponding to the popup feature layer
+                lizmappopupdisplayed: function (popup, containerId) {
+                    // Add action buttons if needed
+                    let popupContainerId = popup.containerId;
+                    let popupContainer = document.getElementById(popupContainerId);
+                    if (!popupContainer) return false;
+                    let featureIdInputSelector = 'div.lizmapPopupContent input.lizmap-popup-layer-feature-id';
+                    Array.from(popupContainer.querySelectorAll(featureIdInputSelector)).map(element => {
+
+                        // Get layer id and feature id
+                        let val = element.value;
+                        let featureId = val.split('.').pop();
+                        let layerId = val.replace('.' + featureId, '');
+
+                        // Get layer lizmap config
+                        let getLayerConfig = mainLizmap.lizmap3.getLayerConfigById(layerId);
+                        if (!getLayerConfig) {
+                            return true;
+                        }
+
+                        // Do nothing if popup feature layer is not found in action config
+                        // and a list of layers related to the action
+                        for (let i in actionConfig) {
+                            let action = actionConfig[i];
+
+                            // Only add action in Popup for the scope "feature"
+                            if (!('scope' in action) || action['scope'] != mainLizmap.action.Scopes.Feature) {
+                                continue;
+                            }
+
+                            // Only add action if the layer is in the list
+                            if (action['layers'].includes(layerId)) {
+                                mainLizmap.action.addPopupActionButton(action, layerId, featureId, popupContainerId);
+                            }
+                        }
+
+                    });
+                }
+            });
+        }
+
+    }
+
+    /**
+     * Create the OpenLayers layer to display the action geometries.
+     *
+     */
+    createActionMapLayer() {
+        // Create the OL layer
+        const strokeColor = 'blue';
+        const strokeWidth = 3;
+        const fillColor = 'rgba(173,216,230,0.8)'; // lightblue
+        this.actionLayer = new VectorLayer({
+            source: new VectorSource({
+                wrapX: false
+            }),
+            style: {
+                'circle-radius': 6,
+                'circle-stroke-color': strokeColor,
+                'circle-stroke-width': strokeWidth,
+                'circle-fill-color': fillColor,
+                'stroke-color': strokeColor,
+                'stroke-width': strokeWidth,
+                'fill-color': fillColor,
+            }
+        });
+
+        // Add the layer inside Lizmap objects
+        mainLizmap.map.addLayer(this.actionLayer);
+    }
+
+    /**
+     * Get an action item by its name and scope.
+     *
+     * If no layer id is given, return the first item
+     * corresponding to the given name.
+     * If the layer ID is given, only return the action
+     * if it concerns the given layer ID.
+     *
+     * @param {string} name - Name of the action
+     * @param {Scopes} scope - Scope of the action
+     * @param {string} layerId - Layer ID (optional)
+     *
+     * @return {object} The corresponding action
+     */
+    getActionItemByName(name, scope = this.Scopes.Feature, layerId = null) {
+
+        if (!this.hasActions) {
+            return null;
+        }
+
+        // Loop through the actions
+        for (let i in actionConfig) {
+            // Current action
+            let action = actionConfig[i];
+
+            // Avoid the actions with a different scope
+            if (action.scope != scope) {
+                continue;
+            }
+
+            // Return the action if its name matches
+            // and optionally also if the layerId matches
+            if (action.name == name) {
+                // Return if not layer ID is given
+                if (layerId === null) {
+                    return action;
+                }
+
+                // Compare the layer ID
+                if ('layers' in action &amp;&amp; action.layers.includes(layerId)) {
+                    return action;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the list of actions
+     *
+     * A scope and/or a layer ID can be given to filter the actions
+     *
+     * @param {string} scope - Scope of the actions to filter
+     * @param {string} layerId - Layer ID of the actions to filter
+     *
+     * @return {array} actions - Array of the actions
+     */
+    getActions(scope = null, layerId = null) {
+
+        let actions = [];
+        if (!this.hasActions) {
+            return actions;
+        }
+        // Loop through the actions
+        for (let i in actionConfig) {
+            let action = actionConfig[i];
+            if (scope &amp;&amp; action.scope != scope) continue;
+            if (layerId &amp;&amp; !('layers' in action)) continue;
+            if (layerId &amp;&amp; !action.layers.includes(layerId)) continue;
+            actions.push(action);
+        }
+
+        return actions;
+    }
+
+
+    /**
+     * Run the callbacks as defined in the action configuration
+     *
+     * @param {object} action - The action
+     * @param {array} features - The OpenLayers features created by the action from the response
+     *
+     */
+    runCallbacks(action, features = null) {
+
+        for (let c in action.callbacks) {
+            // Get the callback item
+            let callback = action.callbacks[c];
+
+            if (callback['method'] == this.CallbackMethods.Zoom &amp;&amp; features.length) {
+                // Zoom to the returned features
+                mainLizmap.extent = this.actionLayer.getSource().getExtent();
+            }
+
+            // Check the given layerId is a valid Lizmap layer
+            // Only for the methods which gives a layerId in their configuration
+            if (callback['method'] == this.CallbackMethods.Redraw || callback['method'] == this.CallbackMethods.Select) {
+
+                let getLayerConfig = mainLizmap.lizmap3.getLayerConfigById(callback['layerId']);
+                if (!getLayerConfig) {
+                    continue;
+                }
+                let featureType = getLayerConfig[0];
+                let layerConfig = getLayerConfig[1];
+
+                // Get the corresponding OpenLayers layer instance
+                const layer = lizMap.mainLizmap.map.getLayerByName(layerConfig.name);
+
+                if(!layer){
+                    continue;
+                }
+
+                // Redraw the layer
+                if (callback['method'] == this.CallbackMethods.Redraw) {
+                    // Redraw the given layer
+                    layer.getSource().changed();
+                }
+
+                // Select items in the layer which intersect the returned geometry
+                if (callback['method'] == this.CallbackMethods.Select &amp;&amp; features.length) {
+                    // Select features in the given layer
+                    let feat = features[0];
+                    let f = feat.clone();
+                    mainLizmap.selectionTool.selectLayerFeaturesFromSelectionFeature(featureType, f);
+                }
+            }
+        }
+    }
+
+    /**
+     * Build the unique ID of an action
+     * based on its scope
+     *
+     * @param {string} actionName - The action name
+     * @param {string} scope - The action scope
+     * @param {string} layerId - The layer ID
+     * @param {string} featureId - The feature ID
+     *
+     * @return {string} uniqueId - The action unique ID.
+     */
+    buildActionInstanceUniqueId(actionName, scope, layerId, featureId) {
+        // The default name is the action name
+        let actionUniqueId = actionName;
+
+        // For the project scope, return
+        if (scope == this.Scopes.Project) {
+            return actionUniqueId;
+        }
+
+        // For the layer and feature scopes, we add the layer ID
+        actionUniqueId += '.' + layerId;
+
+        // For the feature scope, we add the feature ID
+        if (scope == this.Scopes.Feature) {
+            actionUniqueId += '.' + featureId;
+        }
+
+        return actionUniqueId;
+    }
+
+    /**
+     * Explode the action unique ID into its components
+     * action name, layer ID, feature ID
+     *
+     * @param {string} uniqueId - The instance object unique ID
+     *
+     * @return {array} components - The components [actionName, layerId, featureId]
+     */
+    explodeActionInstanceUniqueId(uniqueId) {
+
+        let vals = uniqueId.split('.');
+        let actionName = vals[0];
+        let layerId = (vals.length > 1) ? vals[1] : null;
+        let featureId = (vals.length > 2) ? vals[2] : null;
+
+        return [actionName, layerId, featureId];
+    }
+
+    /**
+     * Run a Lizmap action.
+     *
+     * @param {string} actionName - The action name
+     * @param {Scopes} scope - The action scope
+     * @param {string} layerId - The optional layer ID
+     * @param {string} featureId - The optional feature ID
+     * @param {string} wkt - An optional geometry in WKT format and project EPSG:4326
+     */
+    async runLizmapAction(actionName, scope = this.Scopes.Feature, layerId = null, featureId = null, wkt = null) {
+        if (!this.hasActions) {
+            return false;
+        }
+
+        // Get the action
+        let action = this.getActionItemByName(actionName, scope, layerId);
+        if (!action) {
+            console.warn('No corresponding action found in the configuration !');
+            return false;
+        }
+
+        // Reset the other actions
+        // We allow only one active action at a time
+        // We do not remove the active status of the button (btn-primary)
+        this.resetLizmapAction(true, true, true, false);
+
+        // Set the request parameters
+        let options = {
+            "layerId": layerId,
+            "featureId": featureId,
+            "name": actionName,
+            "wkt": wkt
+        };
+
+        // We add the map extent and center
+        // as WKT geometries
+        let extent = mainLizmap.lizmap3.map.getExtent().clone();
+        extent = extent.transform(mainLizmap.lizmap3.map.getProjection(), 'EPSG:4326');
+        options['mapExtent'] = extent.toGeometry().toString();
+        let center = mainLizmap.lizmap3.map.getCenter().clone();
+        center = center.transform(mainLizmap.lizmap3.map.getProjection(), 'EPSG:4326');
+        options['mapCenter'] = `POINT(${center['lon']} ${center['lat']})`;
+
+        // Request action and get data
+        let url = actionConfigData.url;
+        try {
+            let response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json;charset=utf-8'
+                },
+                body: JSON.stringify(options)
+            });
+
+            // Parse the data
+            let data = await response.json();
+
+            // Report errors
+            if ('errors' in data) {
+                // Reset the action
+                this.resetLizmapAction(true, true, true, true);
+
+                // Display the errors
+                mainLizmap.lizmap3.addMessage(data.errors.title + '\n' + data.errors.detail, 'error', true).attr('id', 'lizmap-action-message');
+                console.warn(data.errors);
+
+                return false;
+            }
+
+            // Add the features in the OpenLayers map layer
+            const features = this.addFeaturesFromActionResponse(data, action.style);
+
+            // Display a message if given in the first feature
+            if (features.length > 0) {
+                const feat = features[0];
+                const featureProperties = feat.getProperties();
+                const message_field = 'message';
+                if (featureProperties &amp;&amp; featureProperties?.[message_field]) {
+
+                    // Clear the previous message
+                    const previousMessage = document.getElementById('lizmap-action-message');
+                    if (previousMessage) previousMessage.remove();
+
+                    // Display the message if given
+                    const message = featureProperties[message_field].trim();
+                    if (message) {
+                        mainLizmap.lizmap3.addMessage(message, 'info', true).attr('id', 'lizmap-action-message');
+                    }
+                }
+            }
+
+            // Run the configured action callbacks
+
+            // Callbacks
+            if (features.length > 0 &amp;&amp; 'callbacks' in action &amp;&amp; action.callbacks.length > 0) {
+                this.runCallbacks(action, features);
+            }
+
+            /**
+             * Lizmap event to allow other scripts to process the data if needed
+             * @event actionResultReceived
+             * @property {string} action Name of the action
+             */
+            lizMap.events.triggerEvent("actionResultReceived",
+                {
+                    'action': action,
+                    'layerId': layerId,
+                    'featureId': featureId,
+                    'features': features // in map projection
+                }
+            );
+
+            // Set the action as active
+            this.ACTIVE_LIZMAP_ACTION = this.buildActionInstanceUniqueId(action.name, scope, layerId, featureId);
+
+        } catch (error) {
+            // Display the error
+            console.warn(error);
+
+            // Reset the action
+            this.resetLizmapAction(true, true, true, true);
+
+        }
+    }
+
+    /**
+     * Reset action
+     *
+     * @param {boolean} destroyFeatures - If we must remove the geometries in the map.
+     * @param {boolean} removeMessage - If we must remove the message displayed at the top.
+     * @param {boolean} resetGlobalVariable - If we must empty the global variable ACTIVE_LIZMAP_ACTION
+     * @param {boolean} resetActiveInterfaceElements - If we must remove the "active" interface for the buttons
+     */
+    resetLizmapAction(destroyFeatures = true, removeMessage = true, resetGlobalVariable = true, resetActiveInterfaceElements = true) {
+
+        // Remove the objects in the map
+        if (destroyFeatures) {
+            this.actionLayer.getSource().clear();
+        }
+
+        // Clear the previous Lizmap message
+        if (removeMessage) {
+            let previousMessage = document.getElementById('lizmap-action-message');
+            if (previousMessage) previousMessage.remove();
+        }
+
+        // Remove all btn-primary classes in the target objects
+        if (resetActiveInterfaceElements) {
+            let selector = '.popup-action.btn-primary';
+            Array.from(document.querySelectorAll(selector)).map(element => {
+                element.classList.remove('btn-primary');
+            });
+        }
+
+        // Reset the global variable
+        if (resetGlobalVariable) {
+            this.ACTIVE_LIZMAP_ACTION = null;
+        }
+    }
+
+    /**
+     * Add the features returned by a action
+     * to the OpenLayers layer in the map
+     *
+     * @param {object} data - The data returned by the action
+     * @param {object|undefined} style - Optional OpenLayers style object
+     *
+     * @return {object} features The OpenLayers features converted from the data
+     */
+    addFeaturesFromActionResponse(data, style) {
+        // Change the layer style
+        if (style) {
+            this.actionLayer.setStyle(style);
+        }
+
+        // Convert the action GeoJSON data into OpenLayers features
+        const features = (new GeoJSON()).readFeatures(data, {
+            featureProjection: mainLizmap.projection
+        });
+
+        // Add them to the action layer
+        this.actionLayer.getSource().addFeatures(features);
+
+        return features;
+    }
+
+    /**
+    * Reacts to the click on a popup action button.
+    *
+    */
+    popupActionButtonClickHandler(event) {
+        // Only go on when the button has been clicked
+        // not the child &lt;i> icon
+        let target = event.target;
+        if (!event.target.matches('.popup-action')) {
+            target = target.parentNode;
+        }
+
+        // Get the button which triggered the click event
+        let button = target;
+
+        // Get the layerId, featureId and action for this button
+        let val = button.value;
+        let [actionName, layerId, featureId] = mainLizmap.action.explodeActionInstanceUniqueId(val);
+
+        // Get the action item data
+        let popupAction = mainLizmap.action.getActionItemByName(actionName, mainLizmap.action.Scopes.Feature, layerId);
+        if (!popupAction) {
+            console.warn('No corresponding action found in the configuration !');
+
+            return false;
+        }
+
+        // We allow only one active action at a time.
+        // If the action is already active for the clicked button
+        // we need to deactivate it completely
+        if (mainLizmap.action.ACTIVE_LIZMAP_ACTION) {
+            let actionUniqueId = mainLizmap.action.buildActionInstanceUniqueId(actionName, mainLizmap.action.Scopes.Feature, layerId, featureId);
+            if (mainLizmap.action.ACTIVE_LIZMAP_ACTION == actionUniqueId) {
+                // Reset the action
+                mainLizmap.action.resetLizmapAction(true, true, true, true);
+
+                // Return
+                return true;
+            }
+        }
+
+        // The action was not active, we can run it
+        // This will override the previous actions and replace them
+        // with this one
+        mainLizmap.action.ACTIVE_LIZMAP_ACTION = null;
+
+        // Display a confirm question if needed
+        if ('confirm' in popupAction &amp;&amp; popupAction.confirm.trim() != '') {
+            let msg = popupAction.confirm.trim();
+            let go_on = confirm(msg);
+            if (!go_on) {
+                return false;
+            }
+        }
+
+        // Reset
+        mainLizmap.action.resetLizmapAction(true, true, true, true);
+
+        // Add the button btn-primary class
+        button.classList.add('btn-primary');
+
+        // Run the Lizmap action for this feature
+        // It will set the global variable ACTIVE_LIZMAP_ACTION
+        mainLizmap.action.runLizmapAction(actionName, mainLizmap.action.Scopes.Feature, layerId, featureId);
+
+        return false;
+    }
+
+    /**
+     * Add an action button for the given popup feature
+     * and the given action item.
+     *
+     * @param {object} action - The action configuration object
+     * @param {string} layerId - The layer ID
+     * @param {string} featureId - The feature ID
+     * @param {string} popupItem - The popup item HTML element
+     */
+    addPopupActionButton(action, layerId, featureId, popupContainerId) {
+
+        // Value of the action button for this layer and this feature
+        let actionUniqueId = this.buildActionInstanceUniqueId(action.name, this.Scopes.Feature, layerId, featureId);
+
+        // Build the HTML button
+        let actionButtonHtml = `
+        &lt;button class="btn btn-mini popup-action" value="${actionUniqueId}" type="button" data-original-title="${action.title}" title="${action.title}">
+        `;
+        // The icon can be
+        // * an old bootstrap 2 icon, e.g. 'icon-star'
+        // * a SVG in the media file, e.g. 'media/icon/my-icon.svg'
+        if (action.icon.startsWith('icon-')) {
+            actionButtonHtml += `&lt;i class="${action.icon}">&lt;/i>`;
+        }
+        let regex = new RegExp('^(\.{1,2})?(/)?media/');
+        if (action.icon.match(regex)) {
+            let mediaLink = lizUrls.media + '?' + new URLSearchParams(lizUrls.params);
+            let imageUrl = `${mediaLink}&amp;path=${action.icon}`;
+            actionButtonHtml += `&lt;img style="width: 20px; height: 20px;" src="${imageUrl}">`;
+        }
+        actionButtonHtml += '&amp;nbsp;&lt;/button>';
+
+        // Find Lizmap popup toolbar
+        let popupContainer = document.getElementById(popupContainerId);
+        let featureToolbar = popupContainer.querySelector(`lizmap-feature-toolbar[value="${layerId}.${featureId}"]`);
+        if (!featureToolbar) {
+            return false;
+        }
+        let featureToolbarDiv = featureToolbar.querySelector('div.feature-toolbar');
+
+        // Get the button if it already exists
+        let existingButton = featureToolbarDiv.querySelector(`button.popup-action[value="${actionUniqueId}"]`);
+        if (existingButton) {
+            return false;
+        }
+
+        // Append the button to the toolbar
+        featureToolbarDiv.insertAdjacentHTML('beforeend', actionButtonHtml);
+        let actionButton = featureToolbarDiv.querySelector(`button.popup-action[value="${actionUniqueId}"]`);
+
+        // If the action is already active for this feature,
+        // add the btn-primary class
+        if (actionButton.value == this.ACTIVE_LIZMAP_ACTION) {
+            actionButton.classList.add('btn-primary');
+        }
+
+        // Trigger the action when clicking on button
+        actionButton.addEventListener('click', mainLizmap.action.popupActionButtonClickHandler);
+    }
+
+};
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector.html">ActionSelector</a></li><li><a href="module-Atlas.html">Atlas</a></li><li><a href="module-AttributeTable.html">AttributeTable</a></li><li><a href="module-Attribution.html">Attribution</a></li><li><a href="module-BaseLayer.html">BaseLayer</a></li><li><a href="module-BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseObject.html">BaseObject</a></li><li><a href="module-BottomDock.html">BottomDock</a></li><li><a href="module-Config.html">Config</a></li><li><a href="module-Constants.html">Constants</a></li><li><a href="module-Converters.html">Converters</a></li><li><a href="module-Dataviz.html">Dataviz</a></li><li><a href="module-Digitizing.html">Digitizing</a></li><li><a href="module-Draw.html">Draw</a></li><li><a href="module-Edition.html">Edition</a></li><li><a href="module-Enums.html">Enums</a></li><li><a href="module-Errors.html">Errors</a></li><li><a href="module-Extent.html">Extent</a></li><li><a href="module-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-Filter.html">Filter</a></li><li><a href="module-FormFilter.html">FormFilter</a></li><li><a href="module-FullScreen.html">FullScreen</a></li><li><a href="module-Geolocation.html">Geolocation</a></li><li><a href="module-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Index.html">Index</a></li><li><a href="module-Layer.html">Layer</a></li><li><a href="module-LayerState.html">LayerState</a></li><li><a href="module-LayerTree.html">LayerTree</a></li><li><a href="module-LayerTreeState.html">LayerTreeState</a></li><li><a href="module-LayersOrder.html">LayersOrder</a></li><li><a href="module-Legend.html">Legend</a></li><li><a href="module-Locate.html">Locate</a></li><li><a href="module-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.html">MapState</a></li><li><a href="module-Mask.html">Mask</a></li><li><a href="module-Metadata.html">Metadata</a></li><li><a href="module-MousePosition.html">MousePosition</a></li><li><a href="module-Options.html">Options</a></li><li><a href="module-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom.html">PasteGeom</a></li><li><a href="module-Permalink.html">Permalink</a></li><li><a href="module-Popup.html">Popup</a></li><li><a href="module-Print.html">Print</a></li><li><a href="module-PrintTemplate.html">PrintTemplate</a></li><li><a href="module-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom.html">ReverseGeom</a></li><li><a href="module-Scaleline.html">Scaleline</a></li><li><a href="module-Search.html">Search</a></li><li><a href="module-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping.html">Snapping</a></li><li><a href="module-State.html">State</a></li><li><a href="module-Switch%2520layer%2520actions.html">Switch layer actions</a></li><li><a href="module-SymbologyAction.html">SymbologyAction</a></li><li><a href="module-SymbologyState.html">SymbologyState</a></li><li><a href="module-Theme.html">Theme</a></li><li><a href="module-Time%2520manager.html">Time manager</a></li><li><a href="module-TimeManager.html">TimeManager</a></li><li><a href="module-Tools.html">Tools</a></li><li><a href="module-Tooltip.html">Tooltip</a></li><li><a href="module-Treeview.html">Treeview</a></li><li><a href="module-Utils.html">Utils</a></li><li><a href="module-View.html">View</a></li><li><a href="module-WFS.html">WFS</a></li><li><a href="module-WMS.html">WMS</a></li><li><a href="module-maps.html">maps</a></li></ul><h3>Classes</h3><ul><li><a href="EventDispatcher.html">EventDispatcher</a></li><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector-ActionSelector.html">ActionSelector</a></li><li><a href="module-Action-Action.html">Action</a></li><li><a href="module-AttributeTable.AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-AttributeTable.AttributeLayersConfig.html">AttributeLayersConfig</a></li><li><a href="module-AttributeTable-AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-Attribution.AttributionConfig.html">AttributionConfig</a></li><li><a href="module-Attribution-AttributionConfig.html">AttributionConfig</a></li><li><a href="module-BaseLayer.BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseLayer.BaseLayersConfig.html">BaseLayersConfig</a></li><li><a href="module-BaseLayer.BingBaseLayerConfig.html">BingBaseLayerConfig</a></li><li><a href="module-BaseLayer.EmptyBaseLayerConfig.html">EmptyBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmsBaseLayerConfig.html">WmsBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmtsBaseLayerConfig.html">WmtsBaseLayerConfig</a></li><li><a href="module-BaseLayer.XyzBaseLayerConfig.html">XyzBaseLayerConfig</a></li><li><a href="module-BaseLayerState.BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayerState.BaseLayersState.html">BaseLayersState</a></li><li><a href="module-BaseLayerState.BingBaseLayerState.html">BingBaseLayerState</a></li><li><a href="module-BaseLayerState.EmptyBaseLayerState.html">EmptyBaseLayerState</a></li><li><a href="module-BaseLayerState.WmsBaseLayerState.html">WmsBaseLayerState</a></li><li><a href="module-BaseLayerState.WmtsBaseLayerState.html">WmtsBaseLayerState</a></li><li><a href="module-BaseLayerState.XyzBaseLayerState.html">XyzBaseLayerState</a></li><li><a href="module-BaseLayers-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseLayer-BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectConfig.html">BaseObjectConfig</a></li><li><a href="module-BaseObject.BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectLayersConfig.html">BaseObjectLayersConfig</a></li><li><a href="module-BaseObject-BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-Config.Config.html">Config</a></li><li><a href="module-Config-Config.html">Config</a></li><li><a href="module-Dataviz.DatavizElementConfig.html">DatavizElementConfig</a></li><li><a href="module-Dataviz.DatavizLayersConfig.html">DatavizLayersConfig</a></li><li><a href="module-Dataviz.DatavizOptionsConfig.html">DatavizOptionsConfig</a></li><li><a href="module-Dataviz.DatavizPlotConfig.html">DatavizPlotConfig</a></li><li><a href="module-Dataviz.DatavizTraceConfig.html">DatavizTraceConfig</a></li><li><a href="module-Digitizing-Digitizing.html">Digitizing</a></li><li><a href="module-Draw-Draw.html">Draw</a></li><li><a href="module-Edition.EditionCapabilitiesConfig.html">EditionCapabilitiesConfig</a></li><li><a href="module-Edition.EditionLayerConfig.html">EditionLayerConfig</a></li><li><a href="module-Edition.EditionLayersConfig.html">EditionLayersConfig</a></li><li><a href="module-Edition-Edition.html">Edition</a></li><li><a href="module-Errors-ConversionError.html">ConversionError</a></li><li><a href="module-Errors-HttpError.html">HttpError</a></li><li><a href="module-Errors-PropertyRequiredError.html">PropertyRequiredError</a></li><li><a href="module-Errors-ValidationError.html">ValidationError</a></li><li><a href="module-Extent.Extent.html">Extent</a></li><li><a href="module-FeatureStorage-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-FormFilter.FormFilterConfig.html">FormFilterConfig</a></li><li><a href="module-FormFilter.FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FormFilter-FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FullScreen-FullScreen.html">FullScreen</a></li><li><a href="module-GeolocationSurvey-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Geolocation-Geolocation.html">Geolocation</a></li><li><a href="module-Layer.LayerConfig.html">LayerConfig</a></li><li><a href="module-Layer.LayersConfig.html">LayersConfig</a></li><li><a href="module-LayerState.LayerGroupState.html">LayerGroupState</a></li><li><a href="module-LayerState.LayerItemState.html">LayerItemState</a></li><li><a href="module-LayerState.LayerLayerState.html">LayerLayerState</a></li><li><a href="module-LayerState.LayerRasterState.html">LayerRasterState</a></li><li><a href="module-LayerState.LayerVectorState.html">LayerVectorState</a></li><li><a href="module-LayerState.LayersAndGroupsCollection.html">LayersAndGroupsCollection</a></li><li><a href="module-LayerTree.LayerBoundingBoxConfig.html">LayerBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerGeographicBoundingBoxConfig.html">LayerGeographicBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerStyleConfig.html">LayerStyleConfig</a></li><li><a href="module-LayerTree.LayerTreeGroupConfig.html">LayerTreeGroupConfig</a></li><li><a href="module-LayerTree.LayerTreeItemConfig.html">LayerTreeItemConfig</a></li><li><a href="module-LayerTree.LayerTreeLayerConfig.html">LayerTreeLayerConfig</a></li><li><a href="module-LayerTreeState.LayerTreeGroupState.html">LayerTreeGroupState</a></li><li><a href="module-LayerTreeState.LayerTreeItemState.html">LayerTreeItemState</a></li><li><a href="module-LayerTreeState.LayerTreeLayerState.html">LayerTreeLayerState</a></li><li><a href="module-Legend-Legend.html">Legend</a></li><li><a href="module-Locate.LocateByLayerConfig.html">LocateByLayerConfig</a></li><li><a href="module-Locate.LocateLayerConfig.html">LocateLayerConfig</a></li><li><a href="module-MGRS-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.MapGroupState.html">MapGroupState</a></li><li><a href="module-MapLayerState.MapItemState.html">MapItemState</a></li><li><a href="module-MapLayerState.MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.MapState.html">MapState</a></li><li><a href="module-Mask-Mask.html">Mask</a></li><li><a href="module-Metadata.MetadataConfig.html">MetadataConfig</a></li><li><a href="module-MousePosition-MousePosition.html">MousePosition</a></li><li><a href="module-Options.OptionsConfig.html">OptionsConfig</a></li><li><a href="module-OverviewMap-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom-pasteGeom.html">pasteGeom</a></li><li><a href="module-Permalink-Permalink.html">Permalink</a></li><li><a href="module-Popup-Popup.html">Popup</a></li><li><a href="module-PrintTemplate.PrintAtlasConfig.html">PrintAtlasConfig</a></li><li><a href="module-PrintTemplate.PrintLabelConfig.html">PrintLabelConfig</a></li><li><a href="module-PrintTemplate.PrintMapConfig.html">PrintMapConfig</a></li><li><a href="module-PrintTemplate.PrintTemplateConfig.html">PrintTemplateConfig</a></li><li><a href="module-Print-Print.html">Print</a></li><li><a href="module-ProxyEvents-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom-reverseGeom.html">reverseGeom</a></li><li><a href="module-Scaleline-Scaleline.html">Scaleline</a></li><li><a href="module-Search-Search.html">Search</a></li><li><a href="module-SelectionInvert-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping-Snapping.html">Snapping</a></li><li><a href="module-State.State.html">State</a></li><li><a href="module-State-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-State-SelectionTool.html">SelectionTool</a></li><li><a href="module-State-State.html">State</a></li><li><a href="module-SymbologyState.BaseIconSymbology.html">BaseIconSymbology</a></li><li><a href="module-SymbologyState.BaseObjectSymbology.html">BaseObjectSymbology</a></li><li><a href="module-SymbologyState.BaseSymbolsSymbology.html">BaseSymbolsSymbology</a></li><li><a href="module-SymbologyState.LayerGroupSymbology.html">LayerGroupSymbology</a></li><li><a href="module-SymbologyState.LayerIconSymbology.html">LayerIconSymbology</a></li><li><a href="module-SymbologyState.LayerSymbolsSymbology.html">LayerSymbolsSymbology</a></li><li><a href="module-SymbologyState.SymbolIconSymbology.html">SymbolIconSymbology</a></li><li><a href="module-SymbologyState.SymbolRuleSymbology.html">SymbolRuleSymbology</a></li><li><a href="module-Theme.LayerThemeConfig.html">LayerThemeConfig</a></li><li><a href="module-Theme.ThemeConfig.html">ThemeConfig</a></li><li><a href="module-Theme.ThemesConfig.html">ThemesConfig</a></li><li><a href="module-TimeManager.TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-TimeManager.TimeManagerLayersConfig.html">TimeManagerLayersConfig</a></li><li><a href="module-TimeManager-TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayerConfig.html">TooltipLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayersConfig.html">TooltipLayersConfig</a></li><li><a href="module-Treeview-Treeview.html">Treeview</a></li><li><a href="module-Utils-Utils.html">Utils</a></li><li><a href="module-WFS-WFS.html">WFS</a></li><li><a href="module-WMS-WMS.html">WMS</a></li><li><a href="module-maps-map.html">map</a></li></ul><h3>Events</h3><ul><li><a href="module-Action.html#~event:actionResultReceived">actionResultReceived</a></li><li><a href="global.html#event:beforetreecreated">beforetreecreated</a></li><li><a href="global.html#event:layersadded">layersadded</a></li><li><a href="global.html#event:mapcreated">mapcreated</a></li><li><a href="global.html#event:treecreated">treecreated</a></li></ul><h3>Global</h3><ul><li><a href="global.html#addListener">addListener</a></li><li><a href="global.html#dispatch">dispatch</a></li><li><a href="global.html#removeListener">removeListener</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.2</a> on Wed Feb 14 2024 14:50:29 GMT+0100 (Central European Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

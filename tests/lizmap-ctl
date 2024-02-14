@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+
+COMMAND="$1"
+EXTRA="${*:2}"
+shift
+
+SCRIPTDIR="$( cd "$(dirname "$0")" ; pwd -P )"
+APPDIR="$SCRIPTDIR/../lizmap/"
+
+if [ "$LZMBRANCH" == "" ]; then
+  LZMBRANCH=$(git rev-parse --abbrev-ref HEAD | tr '[:upper:]' '[:lower:]')
+fi
+
+if [ "$LZMPGPORT" == "" ]; then
+  export LZMPGPORT=8132
+fi
+
+if [ "$LZMWEBPORT" == "" ]; then
+  export LZMWEBPORT=8130
+fi
+
+
+if [ "$COMMAND" == "" ]; then
+    echo "Error: command is missing"
+    echo "Possible commands: "
+    echo " - clean, clean-tmp, reset, reset-sqlite, ldap-reset, rights"
+    echo " - install,  composer-install, composer-update"
+    echo " - psql, redis-cli, shell, shell-root, shell-pgsql, shell-nginx"
+    echo " - phpstan, unit-tests, ldap-users"
+    exit 1;
+fi
+
+function resetfiles() {
+
+  if [ -d $APPDIR/vendor ]; then
+    rm -rf $APPDIR/vendor
+  fi
+
+  if [ -f $APPDIR/composer.lock ]; then
+    rm -f $APPDIR/composer.lock
+  fi
+
+  if [ -d $APPDIR/my-packages/vendor ]; then
+    rm -rf $APPDIR/my-packages/vendor
+  fi
+
+  if [ -f $APPDIR/my-packages/composer.lock ]; then
+    rm -f $APPDIR/my-packages/composer.lock
+  fi
+
+  if [ -f $APPDIR/www/assets/js/lizmap.js ]; then
+    rm -f $APPDIR/www/assets/js/lizmap.js
+  fi
+  if [ -f $APPDIR/www/assets/js/lizmap.js.map ]; then
+    rm -f $APPDIR/www/assets/js/lizmap.js.map
+  fi
+
+  if [ -d $SCRIPTDIR/units/vendor ]; then
+    rm -rf $SCRIPTDIR/units/vendor
+  fi
+
+  if [ -f $SCRIPTDIR/units/composer.lock ]; then
+    rm -f $SCRIPTDIR/units/composer.lock
+  fi
+
+  if [ -d $SCRIPTDIR/../assets/node_modules ]; then
+    rm -rf $SCRIPTDIR/../assets/node_modules
+  fi
+
+  $APPDIR/install/reset.sh reset
+
+}
+
+function execInPhp() {
+  CONTAINER="lizmap${LZMBRANCH}_test_php"
+  if [ "$( docker container inspect -f '{{.State.Running}}' $CONTAINER )" != "true" ]; then
+    echo "ERROR: The lizmap container is not running"
+    exit 1
+  fi
+  docker exec -i $CONTAINER appctl.sh $*
+}
+
+case $COMMAND in
+    clean)
+      resetfiles
+      ;;
+    clean-tmp | clean_tmp)
+       execInPhp clean_tmp;;
+    reset)
+       execInPhp reset;;
+    reset-sqlite)
+       execInPhp reset-sqlite;;
+    install)
+        execInPhp install;;
+    script)
+        execInPhp script $EXTRA;;
+    console)
+        execInPhp console $EXTRA;;
+    rights)
+        execInPhp rights;;
+    composer-install | composer_install)
+        execInPhp composer_install;;
+    composer-update | composer_update)
+        execInPhp composer_update;;
+    unit-tests | unittests)
+        execInPhp unittests;;
+    phpstan)
+        execInPhp phpstan;;
+    docker-exec)
+        docker exec lizmap${LZMBRANCH}_test_php $EXTRA;;
+    shell)
+       docker exec -it --user userphp lizmap${LZMBRANCH}_test_php  /bin/bash -l;;
+    shell-root | shellroot)
+       docker exec -it lizmap${LZMBRANCH}_test_php /bin/bash  -l;;
+    shell-nginx)
+       docker exec -it lizmap${LZMBRANCH}_test_nginx  /bin/bash -l;;
+    ldap-reset | ldapreset)
+      docker exec -it lizmap${LZMBRANCH}_test_ldap /bin/ctl.sh reset
+      ;;
+    ldap-users | ldapusers)
+       docker exec -it lizmap${LZMBRANCH}_test_ldap /bin/ctl.sh showusers
+       ;;
+    psql | pgsql)
+       docker exec -it --user postgres -e PGPASSWORD="lizmap1234!" lizmap${LZMBRANCH}_test_pgsql psql --username=lizmap lizmap
+       ;;
+    shell-pgsql)
+       docker exec -it --user postgres -e PGPASSWORD="lizmap1234!" lizmap${LZMBRANCH}_test_pgsql /bin/bash  -l
+       ;;
+    redis-cli)
+      docker exec -it lizmap${LZMBRANCH}_test_redis redis-cli
+      ;;
+    *)
+        echo "wrong command"
+        exit 2
+        ;;
+esac

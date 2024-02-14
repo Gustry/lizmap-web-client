@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    assignees:
+      - "Gustry"
+
+  - package-ecosystem: "composer"
+    directory: "/lizmap"
+    schedule:
+      interval: "monthly"
+#    assignees:
+#      - "laurentj"
+
+  - package-ecosystem: "composer"
+    directory: "/tests/units"
+    schedule:
+      interval: "monthly"
+
+#  - package-ecosystem: "npm"
+#    directory: "/assets"
+#    schedule:
+#      interval: "monthly"
+#    assignees:
+#      - "nboisteault"

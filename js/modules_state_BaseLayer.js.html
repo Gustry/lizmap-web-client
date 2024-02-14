@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: modules/state/BaseLayer.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: modules/state/BaseLayer.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module state/BaseLayer.js
+ * @name BaseLayerState
+ * @copyright 2023 3Liz
+ * @author DHONT René-Luc
+ * @license MPL-2.0
+ */
+
+import EventDispatcher from './../../utils/EventDispatcher.js';
+import { LayerConfig } from './../config/Layer.js';
+import { AttributionConfig } from './../config/Attribution.js'
+import { BaseLayerTypes, BaseLayersConfig, BaseLayerConfig, EmptyBaseLayerConfig, XyzBaseLayerConfig, BingBaseLayerConfig, WmtsBaseLayerConfig, WmsBaseLayerConfig } from './../config/BaseLayer.js';
+import { LayerVectorState, LayerRasterState, LayerGroupState, LayersAndGroupsCollection } from './Layer.js'
+import { MapLayerLoadStatus } from './MapLayer.js';
+
+/**
+ * Class representing a base layer state
+ * @class
+ */
+export class BaseLayerState extends EventDispatcher {
+    /**
+     * Create a base layer state based on the base layer config
+     * @param {BaseLayerConfig}                                   baseLayerCfg - the lizmap config object for base layer
+     * @param {LayerVectorState|LayerRasterState|LayerGroupState} [itemState]  - the lizmap layer item state of the base layer if exists
+     */
+    constructor(baseLayerCfg, itemState = null ) {
+        if (itemState !== null &amp;&amp; baseLayerCfg.name !== itemState.name) {
+            throw new TypeError('Base layer config and layer item sate have not the same name!\n- `'+baseLayerCfg.name+'` for base layer config\n- `'+itemState.name+'` for layer item state');
+        }
+        super()
+        this._baseLayerConfig = baseLayerCfg;
+        this._itemState = itemState;
+        this._loadStatus = MapLayerLoadStatus.Undefined;
+    }
+
+    /**
+     * The base layer type
+     * @type {string}
+     */
+    get type() {
+        return this._baseLayerConfig.type;
+    }
+
+    /**
+     * The base layer name
+     * @type {string}
+     */
+    get name() {
+        return this._baseLayerConfig.name;
+    }
+
+    /**
+     * The base layer title
+     * @type {string}
+     */
+    get title() {
+        return this._baseLayerConfig.title;
+    }
+
+    /**
+     * The base layer key is defined
+     * @type {boolean}
+     */
+    get hasKey() {
+        return this._baseLayerConfig.hasKey;
+    }
+
+    /**
+     * The base layer key
+     * @type {?string}
+     */
+    get key() {
+        return this._baseLayerConfig.key;
+    }
+
+    /**
+     * Attribution is defined
+     * @type {boolean}
+     */
+    get hasAttribution() {
+        return this._baseLayerConfig.hasAttribution;
+    }
+    /**
+     * Attribution
+     * @type {?AttributionConfig}
+     */
+    get attribution() {
+        return this._baseLayerConfig.attribution;
+    }
+
+    /**
+     * A Lizmap layer config is associated with this base layer
+     * @type {boolean}
+     */
+    get hasLayerConfig() {
+        return this._baseLayerConfig.hasLayerConfig;
+    }
+    /**
+     * The Lizmap layer config associated with this base layer
+     * @type {?LayerConfig}
+     */
+    get layerConfig() {
+        return this._baseLayerConfig.layerConfig;
+    }
+
+    /**
+     * A Lizmap layer item state is associated with this base layer
+     * @type {boolean}
+     */
+    get hasItemState() {
+        return this._itemState !== null;
+    }
+    /**
+     * The Lizmap layer item state associated with this base layer
+     * @type {?LayerVectorState|LayerRasterState|LayerGroupState}
+     */
+    get itemState() {
+        return this._itemState;
+    }
+
+    /**
+     * The layer load status
+     * @see MapLayerLoadStatus
+     * @type {string}
+     */
+    get loadStatus() {
+        return this._loadStatus;
+    }
+
+
+    /**
+     * Set layer load status
+     * @see MapLayerLoadStatus
+     * @param {string} status - Expected values provided by the map layer load status enum
+     */
+    set loadStatus(status) {
+        const statusKeys = Object.keys(MapLayerLoadStatus).filter(key => MapLayerLoadStatus[key] === status);
+        if (statusKeys.length != 1) {
+            throw new TypeError('Unkonw status: `'+status+'`!');
+        }
+
+        // No changes
+        if (this._loadStatus == status) {
+            return;
+        }
+        // Set new value
+        this._loadStatus = status;
+
+        this.dispatch({
+            type: 'layer.load.status.changed',
+            name: this.name,
+            loadStatus: this.loadStatus,
+        })
+    }
+}
+
+/**
+ * Class representing an empty base layer state
+ * @class
+ * @augments BaseLayerState
+ */
+export class EmptyBaseLayerState extends BaseLayerState {
+    /**
+     * Create a base layers empty state based on the empty base layer config
+     * @param {EmptyBaseLayerConfig} baseLayerCfg - the lizmap empty base layer config object
+     * @param {LayerGroupState}       [itemState]  - the lizmap empty layer group state
+     */
+    constructor(baseLayerCfg, itemState = null ) {
+        if (baseLayerCfg.type !== BaseLayerTypes.Empty) {
+            throw new TypeError('Not an `' + BaseLayerTypes.Empty + '` base layer config. Get `' + baseLayerCfg.type + '` type for `' + baseLayerCfg.name + '` base layer!');
+        }
+        super(baseLayerCfg, itemState)
+    }
+}
+
+/**
+ * Class representing an xyz base layer state
+ * @class
+ * @augments BaseLayerState
+ */
+export class XyzBaseLayerState extends BaseLayerState {
+    /**
+     * Create a base layers xyz state based on the xyz base layer config
+     * @param {XyzBaseLayerConfig} baseLayerCfg - the lizmap xyz base layer config object
+     * @param {LayerRasterState}    [itemState]  - the lizmap xyz layer layer state
+     */
+    constructor(baseLayerCfg, itemState = null ) {
+        if (baseLayerCfg.type !== BaseLayerTypes.XYZ) {
+            throw new TypeError('Not an `' + BaseLayerTypes.XYZ + '` base layer config. Get `' + baseLayerCfg.type + '` type for `' + baseLayerCfg.name + '` base layer!');
+        }
+        super(baseLayerCfg, itemState)
+    }
+
+    /**
+     * The base layer url
+     * @type {string}
+     */
+    get url() {
+        return this._baseLayerConfig.url;
+    }
+
+    /**
+     * The base layer zmin
+     * @type {number}
+     */
+    get zmin() {
+        return this._baseLayerConfig.zmin;
+    }
+
+    /**
+     * The base layer zmax
+     * @type {number}
+     */
+    get zmax() {
+        return this._baseLayerConfig.zmax;
+    }
+
+    /**
+     * The base layer crs
+     * @type {string}
+     */
+    get crs() {
+        return this._baseLayerConfig.crs;
+    }
+}
+
+/**
+ * Class representing an bing base layer state
+ * @class
+ * @augments BaseLayerState
+ */
+export class BingBaseLayerState extends BaseLayerState {
+    /**
+     * Create a base layers bing state based on the bing base layer config
+     * @param {BingBaseLayerConfig} baseLayerCfg - the lizmap bing base layer config object
+     * @param {LayerRasterState}     [itemState]  - the lizmap bing layer layer state
+     */
+    constructor(baseLayerCfg, itemState = null ) {
+        if (baseLayerCfg.type !== BaseLayerTypes.Bing) {
+            throw new TypeError('Not an `' + BaseLayerTypes.Bing + '` base layer config. Get `' + baseLayerCfg.type + '` type for `' + baseLayerCfg.name + '` base layer!');
+        }
+        super(baseLayerCfg, itemState)
+    }
+
+    /**
+     * The bing imagerySet
+     * @type {string}
+     */
+    get imagerySet() {
+        return this._baseLayerConfig.imagerySet;
+    }
+}
+
+/**
+ * Class representing an WMTS base layer state
+ * @class
+ * @augments BaseLayerState
+ */
+export class WmtsBaseLayerState extends BaseLayerState {
+    /**
+     * Create a base layers WMTS state based on the WMTS base layer config
+     * @param {WmtsBaseLayerConfig} baseLayerCfg - the lizmap WMTS base layer config object
+     * @param {LayerRasterState}      [itemState]  - the lizmap WMTS layer layer state
+     */
+    constructor(baseLayerCfg, itemState = null ) {
+        if (baseLayerCfg.type !== BaseLayerTypes.WMTS) {
+            throw new TypeError('Not an `' + BaseLayerTypes.WMTS + '` base layer config. Get `' + baseLayerCfg.type + '` type for `' + baseLayerCfg.name + '` base layer!');
+        }
+        super(baseLayerCfg, itemState)
+    }
+
+    /**
+     * The base layer url
+     * @type {string}
+     */
+    get url() {
+        return this._baseLayerConfig.url;
+    }
+
+    /**
+     * The base layer wmts layer
+     * @type {string}
+     */
+    get layer() {
+        return this._baseLayerConfig.layer;
+    }
+
+    /**
+     * The base layer wmts format
+     * @type {string}
+     */
+    get format() {
+        return this._baseLayerConfig.format;
+    }
+
+    /**
+     * The base layer wmts style
+     * @type {string}
+     */
+    get style() {
+        return this._baseLayerConfig.style;
+    }
+
+    /**
+     * The base layer matrixSet
+     * @type {string}
+     */
+    get matrixSet() {
+        return this._baseLayerConfig.matrixSet;
+    }
+
+    /**
+     * The base layer crs
+     * @type {string}
+     */
+    get crs() {
+        return this._baseLayerConfig.crs;
+    }
+
+    /**
+     * The base layer numZoomLevels
+     * @type {number}
+     */
+    get numZoomLevels() {
+        return this._baseLayerConfig.numZoomLevels;
+    }
+}
+
+/**
+ * Class representing an WMS base layer state
+ * @class
+ * @augments BaseLayerState
+ */
+export class WmsBaseLayerState extends BaseLayerState {
+    /**
+     * Create a base layers WMS state based on the WMS base layer config
+     * @param {WmsBaseLayerConfig} baseLayerCfg - the lizmap WMS base layer config object
+     * @param {LayerRasterState}    [itemState]  - the lizmap WMS layer layer state
+     */
+    constructor(baseLayerCfg, itemState = null ) {
+        if (baseLayerCfg.type !== BaseLayerTypes.WMS) {
+            throw new TypeError('Not an `' + BaseLayerTypes.WMS + '` base layer config. Get `' + baseLayerCfg.type + '` type for `' + baseLayerCfg.name + '` base layer!');
+        }
+        super(baseLayerCfg, itemState)
+    }
+
+    /**
+     * The base layer url
+     * @type {string}
+     */
+    get url() {
+        return this._baseLayerConfig.url;
+    }
+
+    /**
+     * The base layer wms layer
+     * @type {string}
+     */
+    get layers() {
+        return this._baseLayerConfig.layers;
+    }
+
+    /**
+     * The base layer wms format
+     * @type {string}
+     */
+    get format() {
+        return this._baseLayerConfig.format;
+    }
+
+    /**
+     * The base layer wms style
+     * @type {string}
+     */
+    get styles() {
+        return this._baseLayerConfig.styles;
+    }
+
+    /**
+     * The base layer crs
+     * @type {string}
+     */
+    get crs() {
+        return this._baseLayerConfig.crs;
+    }
+}
+
+/**
+ * Class representing a base layers state
+ * @class
+ */
+export class BaseLayersState extends EventDispatcher {
+
+    /**
+     * Create a base layers state based on the base layers config
+     * @param {BaseLayersConfig}          baseLayersCfg - the lizmap config object for base layers
+     * @param {LayersAndGroupsCollection} lgCollection  - the collection of layers and groups state
+     */
+    constructor(baseLayersCfg, lgCollection) {
+        super()
+
+        //this._baseLayersMap = new Map(baseLayersCfg.baseLayerConfigs.map(l => [l.name, l]));
+        this._baseLayersMap = new Map()
+        for (const blConfig of baseLayersCfg.getBaseLayerConfigs()) {
+            let itemState = null;
+            if (blConfig.hasLayerConfig) {
+                itemState = lgCollection.getLayerOrGroupByName(blConfig.name);
+            }
+            switch(blConfig.type) {
+                case BaseLayerTypes.Empty:
+                    this._baseLayersMap.set(blConfig.name, new EmptyBaseLayerState(blConfig, itemState));
+                    break;
+                case BaseLayerTypes.XYZ:
+                    this._baseLayersMap.set(blConfig.name, new XyzBaseLayerState(blConfig, itemState));
+                    break;
+                case BaseLayerTypes.Bing:
+                    this._baseLayersMap.set(blConfig.name, new BingBaseLayerState(blConfig, itemState));
+                    break;
+                case BaseLayerTypes.WMTS:
+                    this._baseLayersMap.set(blConfig.name, new WmtsBaseLayerState(blConfig, itemState));
+                    break;
+                case BaseLayerTypes.WMS:
+                    this._baseLayersMap.set(blConfig.name, new WmsBaseLayerState(blConfig, itemState));
+                    break;
+                default:
+                    this._baseLayersMap.set(blConfig.name, new BaseLayerState(blConfig, itemState));
+                    break;
+            }
+        }
+        this._selectedBaseLayerName = baseLayersCfg.startupBaselayerName;
+    }
+
+    /**
+     * Selected base layer name
+     * @type {string}
+     */
+    get selectedBaseLayerName() {
+        return this._selectedBaseLayerName;
+    }
+
+    /**
+     * Set selected base layer name
+     * @param {string} name - the selected base layer name
+     * @throws {RangeError} When the base layer name is unknown!
+     */
+    set selectedBaseLayerName(name) {
+        if (this._selectedBaseLayerName === name) {
+            return;
+        }
+        if (this._baseLayersMap.get(name) === undefined) {
+            throw new RangeError('The base layer name `'+ name +'` is unknown!');
+        }
+        this._selectedBaseLayerName = name;
+        this.dispatch({
+            type: 'baselayers.selection.changed',
+            name: this.selectedBaseLayerName
+        });
+    }
+
+    /**
+     * Selected base layer config
+     * @type {BaseLayerState}
+     */
+    get selectedBaseLayer() {
+        return this._baseLayersMap.get(this._selectedBaseLayerName);
+    }
+
+    /**
+     * Base layer names
+     * @type {string[]}
+     */
+    get baseLayerNames() {
+        return [...this._baseLayersMap.keys()];
+    }
+
+    /**
+     * Base layer configs
+     * @type {BaseLayerState[]}
+     */
+    get baseLayers() {
+        return [...this._baseLayersMap.values()];
+    }
+
+    /**
+     * Get a base layer config by base layer name
+     * @param {string} name - the base layer name
+     * @returns {BaseLayerState} The base layer config associated to the name
+     * @throws {RangeError} The base layer name is unknown
+     */
+    getBaseLayerByName(name) {
+        const layer = this._baseLayersMap.get(name);
+        if (layer !== undefined) {
+            if (layer.name !== name) {
+                throw 'The base layers state has been corrupted!'
+            }
+            return layer;
+        }
+        throw new RangeError('The base layer name `'+ name +'` is unknown!');
+    }
+
+    /**
+     * Iterate through base layer names
+     * @generator
+     * @yields {string} The next base layer name
+     */
+    *getBaseLayerNames() {
+        for (const name of this._baseLayersMap.keys()) {
+            yield name;
+        }
+    }
+
+    /**
+     * Iterate through base layer configs
+     * @generator
+     * @yields {BaseLayerState} The next base layer config
+     */
+    *getBaseLayers() {
+        for (const layer of this._baseLayersMap.values()) {
+            yield layer;
+        }
+    }
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector.html">ActionSelector</a></li><li><a href="module-Atlas.html">Atlas</a></li><li><a href="module-AttributeTable.html">AttributeTable</a></li><li><a href="module-Attribution.html">Attribution</a></li><li><a href="module-BaseLayer.html">BaseLayer</a></li><li><a href="module-BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseObject.html">BaseObject</a></li><li><a href="module-BottomDock.html">BottomDock</a></li><li><a href="module-Config.html">Config</a></li><li><a href="module-Constants.html">Constants</a></li><li><a href="module-Converters.html">Converters</a></li><li><a href="module-Dataviz.html">Dataviz</a></li><li><a href="module-Digitizing.html">Digitizing</a></li><li><a href="module-Draw.html">Draw</a></li><li><a href="module-Edition.html">Edition</a></li><li><a href="module-Enums.html">Enums</a></li><li><a href="module-Errors.html">Errors</a></li><li><a href="module-Extent.html">Extent</a></li><li><a href="module-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-Filter.html">Filter</a></li><li><a href="module-FormFilter.html">FormFilter</a></li><li><a href="module-FullScreen.html">FullScreen</a></li><li><a href="module-Geolocation.html">Geolocation</a></li><li><a href="module-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Index.html">Index</a></li><li><a href="module-Layer.html">Layer</a></li><li><a href="module-LayerState.html">LayerState</a></li><li><a href="module-LayerTree.html">LayerTree</a></li><li><a href="module-LayerTreeState.html">LayerTreeState</a></li><li><a href="module-LayersOrder.html">LayersOrder</a></li><li><a href="module-Legend.html">Legend</a></li><li><a href="module-Locate.html">Locate</a></li><li><a href="module-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.html">MapState</a></li><li><a href="module-Mask.html">Mask</a></li><li><a href="module-Metadata.html">Metadata</a></li><li><a href="module-MousePosition.html">MousePosition</a></li><li><a href="module-Options.html">Options</a></li><li><a href="module-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom.html">PasteGeom</a></li><li><a href="module-Permalink.html">Permalink</a></li><li><a href="module-Popup.html">Popup</a></li><li><a href="module-Print.html">Print</a></li><li><a href="module-PrintTemplate.html">PrintTemplate</a></li><li><a href="module-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom.html">ReverseGeom</a></li><li><a href="module-Scaleline.html">Scaleline</a></li><li><a href="module-Search.html">Search</a></li><li><a href="module-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping.html">Snapping</a></li><li><a href="module-State.html">State</a></li><li><a href="module-Switch%2520layer%2520actions.html">Switch layer actions</a></li><li><a href="module-SymbologyAction.html">SymbologyAction</a></li><li><a href="module-SymbologyState.html">SymbologyState</a></li><li><a href="module-Theme.html">Theme</a></li><li><a href="module-Time%2520manager.html">Time manager</a></li><li><a href="module-TimeManager.html">TimeManager</a></li><li><a href="module-Tools.html">Tools</a></li><li><a href="module-Tooltip.html">Tooltip</a></li><li><a href="module-Treeview.html">Treeview</a></li><li><a href="module-Utils.html">Utils</a></li><li><a href="module-View.html">View</a></li><li><a href="module-WFS.html">WFS</a></li><li><a href="module-WMS.html">WMS</a></li><li><a href="module-maps.html">maps</a></li></ul><h3>Classes</h3><ul><li><a href="EventDispatcher.html">EventDispatcher</a></li><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector-ActionSelector.html">ActionSelector</a></li><li><a href="module-Action-Action.html">Action</a></li><li><a href="module-AttributeTable.AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-AttributeTable.AttributeLayersConfig.html">AttributeLayersConfig</a></li><li><a href="module-AttributeTable-AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-Attribution.AttributionConfig.html">AttributionConfig</a></li><li><a href="module-Attribution-AttributionConfig.html">AttributionConfig</a></li><li><a href="module-BaseLayer.BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseLayer.BaseLayersConfig.html">BaseLayersConfig</a></li><li><a href="module-BaseLayer.BingBaseLayerConfig.html">BingBaseLayerConfig</a></li><li><a href="module-BaseLayer.EmptyBaseLayerConfig.html">EmptyBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmsBaseLayerConfig.html">WmsBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmtsBaseLayerConfig.html">WmtsBaseLayerConfig</a></li><li><a href="module-BaseLayer.XyzBaseLayerConfig.html">XyzBaseLayerConfig</a></li><li><a href="module-BaseLayerState.BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayerState.BaseLayersState.html">BaseLayersState</a></li><li><a href="module-BaseLayerState.BingBaseLayerState.html">BingBaseLayerState</a></li><li><a href="module-BaseLayerState.EmptyBaseLayerState.html">EmptyBaseLayerState</a></li><li><a href="module-BaseLayerState.WmsBaseLayerState.html">WmsBaseLayerState</a></li><li><a href="module-BaseLayerState.WmtsBaseLayerState.html">WmtsBaseLayerState</a></li><li><a href="module-BaseLayerState.XyzBaseLayerState.html">XyzBaseLayerState</a></li><li><a href="module-BaseLayers-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseLayer-BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectConfig.html">BaseObjectConfig</a></li><li><a href="module-BaseObject.BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectLayersConfig.html">BaseObjectLayersConfig</a></li><li><a href="module-BaseObject-BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-Config.Config.html">Config</a></li><li><a href="module-Config-Config.html">Config</a></li><li><a href="module-Dataviz.DatavizElementConfig.html">DatavizElementConfig</a></li><li><a href="module-Dataviz.DatavizLayersConfig.html">DatavizLayersConfig</a></li><li><a href="module-Dataviz.DatavizOptionsConfig.html">DatavizOptionsConfig</a></li><li><a href="module-Dataviz.DatavizPlotConfig.html">DatavizPlotConfig</a></li><li><a href="module-Dataviz.DatavizTraceConfig.html">DatavizTraceConfig</a></li><li><a href="module-Digitizing-Digitizing.html">Digitizing</a></li><li><a href="module-Draw-Draw.html">Draw</a></li><li><a href="module-Edition.EditionCapabilitiesConfig.html">EditionCapabilitiesConfig</a></li><li><a href="module-Edition.EditionLayerConfig.html">EditionLayerConfig</a></li><li><a href="module-Edition.EditionLayersConfig.html">EditionLayersConfig</a></li><li><a href="module-Edition-Edition.html">Edition</a></li><li><a href="module-Errors-ConversionError.html">ConversionError</a></li><li><a href="module-Errors-HttpError.html">HttpError</a></li><li><a href="module-Errors-PropertyRequiredError.html">PropertyRequiredError</a></li><li><a href="module-Errors-ValidationError.html">ValidationError</a></li><li><a href="module-Extent.Extent.html">Extent</a></li><li><a href="module-FeatureStorage-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-FormFilter.FormFilterConfig.html">FormFilterConfig</a></li><li><a href="module-FormFilter.FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FormFilter-FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FullScreen-FullScreen.html">FullScreen</a></li><li><a href="module-GeolocationSurvey-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Geolocation-Geolocation.html">Geolocation</a></li><li><a href="module-Layer.LayerConfig.html">LayerConfig</a></li><li><a href="module-Layer.LayersConfig.html">LayersConfig</a></li><li><a href="module-LayerState.LayerGroupState.html">LayerGroupState</a></li><li><a href="module-LayerState.LayerItemState.html">LayerItemState</a></li><li><a href="module-LayerState.LayerLayerState.html">LayerLayerState</a></li><li><a href="module-LayerState.LayerRasterState.html">LayerRasterState</a></li><li><a href="module-LayerState.LayerVectorState.html">LayerVectorState</a></li><li><a href="module-LayerState.LayersAndGroupsCollection.html">LayersAndGroupsCollection</a></li><li><a href="module-LayerTree.LayerBoundingBoxConfig.html">LayerBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerGeographicBoundingBoxConfig.html">LayerGeographicBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerStyleConfig.html">LayerStyleConfig</a></li><li><a href="module-LayerTree.LayerTreeGroupConfig.html">LayerTreeGroupConfig</a></li><li><a href="module-LayerTree.LayerTreeItemConfig.html">LayerTreeItemConfig</a></li><li><a href="module-LayerTree.LayerTreeLayerConfig.html">LayerTreeLayerConfig</a></li><li><a href="module-LayerTreeState.LayerTreeGroupState.html">LayerTreeGroupState</a></li><li><a href="module-LayerTreeState.LayerTreeItemState.html">LayerTreeItemState</a></li><li><a href="module-LayerTreeState.LayerTreeLayerState.html">LayerTreeLayerState</a></li><li><a href="module-Legend-Legend.html">Legend</a></li><li><a href="module-Locate.LocateByLayerConfig.html">LocateByLayerConfig</a></li><li><a href="module-Locate.LocateLayerConfig.html">LocateLayerConfig</a></li><li><a href="module-MGRS-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.MapGroupState.html">MapGroupState</a></li><li><a href="module-MapLayerState.MapItemState.html">MapItemState</a></li><li><a href="module-MapLayerState.MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.MapState.html">MapState</a></li><li><a href="module-Mask-Mask.html">Mask</a></li><li><a href="module-Metadata.MetadataConfig.html">MetadataConfig</a></li><li><a href="module-MousePosition-MousePosition.html">MousePosition</a></li><li><a href="module-Options.OptionsConfig.html">OptionsConfig</a></li><li><a href="module-OverviewMap-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom-pasteGeom.html">pasteGeom</a></li><li><a href="module-Permalink-Permalink.html">Permalink</a></li><li><a href="module-Popup-Popup.html">Popup</a></li><li><a href="module-PrintTemplate.PrintAtlasConfig.html">PrintAtlasConfig</a></li><li><a href="module-PrintTemplate.PrintLabelConfig.html">PrintLabelConfig</a></li><li><a href="module-PrintTemplate.PrintMapConfig.html">PrintMapConfig</a></li><li><a href="module-PrintTemplate.PrintTemplateConfig.html">PrintTemplateConfig</a></li><li><a href="module-Print-Print.html">Print</a></li><li><a href="module-ProxyEvents-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom-reverseGeom.html">reverseGeom</a></li><li><a href="module-Scaleline-Scaleline.html">Scaleline</a></li><li><a href="module-Search-Search.html">Search</a></li><li><a href="module-SelectionInvert-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping-Snapping.html">Snapping</a></li><li><a href="module-State.State.html">State</a></li><li><a href="module-State-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-State-SelectionTool.html">SelectionTool</a></li><li><a href="module-State-State.html">State</a></li><li><a href="module-SymbologyState.BaseIconSymbology.html">BaseIconSymbology</a></li><li><a href="module-SymbologyState.BaseObjectSymbology.html">BaseObjectSymbology</a></li><li><a href="module-SymbologyState.BaseSymbolsSymbology.html">BaseSymbolsSymbology</a></li><li><a href="module-SymbologyState.LayerGroupSymbology.html">LayerGroupSymbology</a></li><li><a href="module-SymbologyState.LayerIconSymbology.html">LayerIconSymbology</a></li><li><a href="module-SymbologyState.LayerSymbolsSymbology.html">LayerSymbolsSymbology</a></li><li><a href="module-SymbologyState.SymbolIconSymbology.html">SymbolIconSymbology</a></li><li><a href="module-SymbologyState.SymbolRuleSymbology.html">SymbolRuleSymbology</a></li><li><a href="module-Theme.LayerThemeConfig.html">LayerThemeConfig</a></li><li><a href="module-Theme.ThemeConfig.html">ThemeConfig</a></li><li><a href="module-Theme.ThemesConfig.html">ThemesConfig</a></li><li><a href="module-TimeManager.TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-TimeManager.TimeManagerLayersConfig.html">TimeManagerLayersConfig</a></li><li><a href="module-TimeManager-TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayerConfig.html">TooltipLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayersConfig.html">TooltipLayersConfig</a></li><li><a href="module-Treeview-Treeview.html">Treeview</a></li><li><a href="module-Utils-Utils.html">Utils</a></li><li><a href="module-WFS-WFS.html">WFS</a></li><li><a href="module-WMS-WMS.html">WMS</a></li><li><a href="module-maps-map.html">map</a></li></ul><h3>Events</h3><ul><li><a href="module-Action.html#~event:actionResultReceived">actionResultReceived</a></li><li><a href="global.html#event:beforetreecreated">beforetreecreated</a></li><li><a href="global.html#event:layersadded">layersadded</a></li><li><a href="global.html#event:mapcreated">mapcreated</a></li><li><a href="global.html#event:treecreated">treecreated</a></li></ul><h3>Global</h3><ul><li><a href="global.html#addListener">addListener</a></li><li><a href="global.html#dispatch">dispatch</a></li><li><a href="global.html#removeListener">removeListener</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.2</a> on Wed Feb 14 2024 14:50:29 GMT+0100 (Central European Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

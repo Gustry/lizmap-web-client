@@ -1,0 +1,54 @@
+name: "🎳 Unit tests"
+
+on:
+  push:
+    branches:
+      - master
+      - release_3_*
+  pull_request:
+    branches:
+      - master
+      - release_3_*
+
+jobs:
+  php-tests:
+    name: "🐘 PHP-Unit"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php-version: [
+          '8.0',
+          '8.1',
+          '8.2',
+        ]
+    steps:
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP with tools
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: php-cs-fixer, phpunit
+
+      - name: Running tests
+        run: make tests
+
+  js-tests:
+    name: "🟨 JS-Unit"
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+
+      - name: Install dependencies
+        working-directory: tests/js-units
+        run: npm install
+
+      - name: Running tests
+        working-directory: tests/js-units
+        run: npm run js:test

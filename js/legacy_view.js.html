@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: legacy/view.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: legacy/view.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module legacy/view.js
+ * @name View
+ * @copyright 2023 3Liz
+ * @license MPL-2.0
+ */
+
+var searchProjects = function(){
+    // Hide search if there are no projects
+    if ($("#content.container li .liz-project-title").length === 0) {
+        $("#search").hide();
+        return;
+    }
+
+    // Activate tooltips
+    $('#toggle-search, #search-project').tooltip();
+
+    // Handle keywords/title toggle
+    $('#toggle-search').click(function(){
+        if ($(this).text() === '#'){
+            $(this).text('T');
+
+            $('.project-keyword').addClass('hide');
+            $('#search-project-keywords-selected').text('');
+        }else{
+            $(this).text('#');
+
+            $('.project-keyword').removeClass('hide');
+        }
+
+        // Relaunch search
+        $("#content.container .liz-repository-project-item").show();
+        $("#content.container .liz-repository-title").show();
+        $("#search-project").keyup();
+    });
+
+    var onlyUnique = function (value, index, self) {
+        return self.indexOf(value) === index;
+    }
+
+    // Get unique keywords for visible projects
+    var getVisibleProjectsKeywords = function() {
+        var keywordList = [];
+        var selector = '.liz-repository-project-item :visible .keywordList';
+
+        $(selector).each(function () {
+            if ($(this).text() !== '') {
+                var keywordsSplitByComma = $(this).text().toUpperCase().split(', ');
+                if (isGraph) {
+                    for (var index = 0; index &lt; keywordsSplitByComma.length; index++) {
+                        keywordList = keywordList.concat(keywordsSplitByComma[index].split('/'));
+                    }
+                }else{
+                    keywordList = keywordList.concat(keywordsSplitByComma);
+                }
+            }
+        });
+
+        return keywordList.filter(onlyUnique);
+    }
+
+    // For graph
+    var getEdges = function () {
+        var edgeList = [];
+
+        $('.liz-repository-project-item :visible .keywordList').each(function () {
+            if ($(this).text() !== '') {
+                var keywordsSplitByComma = $(this).text().toUpperCase().split(', ');
+                for (var index = 0; index &lt; keywordsSplitByComma.length; index++) {
+                    var keywordsInGraph = keywordsSplitByComma[index].split('/');
+
+                    // Get edges
+                    for (var i = 0; i &lt; keywordsInGraph.length - 1; i++) {
+                        edgeList.push([keywordsInGraph[i], keywordsInGraph[i + 1]]);
+                    }
+                }
+            }
+        });
+        return edgeList;
+    }
+
+    // Function to show only projects with selected keywords
+    var filterProjectsBySelectedKeywords = function () {
+        var selectedKeywords = getSelectedKeywords();
+
+        if (selectedKeywords.length === 0) {
+            $("#content.container .liz-repository-project-item").show();
+            $("#content.container .liz-repository-title").show();
+        } else {
+            // Hide everything then show projects and titles corresponding to the selected keywords
+            $("#content.container .liz-repository-project-item").hide();
+            $("#content.container .liz-repository-title").hide();
+
+            // Show project when its keywords match all keywords in selectedKeywords
+            $('.keywordList').each(function () {
+                var showProject = false;
+                var keywordListSplitByComma = $(this).text().toUpperCase().split(', ');
+
+                // Graph
+                if (isGraph) {
+                    var path = selectedKeywords.join('/');
+                    for (var index = 0; index &lt; keywordListSplitByComma.length; index++) {
+                        if (keywordListSplitByComma[index].indexOf(path) !== -1) {
+                            showProject = true;
+                            break;
+                        }
+                    }
+                } else {
+                    showProject = selectedKeywords.every(function (currentValue) {
+                        return (keywordListSplitByComma.indexOf(currentValue) !== -1);
+                    });
+                }
+
+                if (showProject) {
+                    $(this).closest('.liz-repository-project-item').show();
+                    $(this).closest('.liz-repository-project-list').prev('.liz-repository-title').show();
+                }
+            });
+        }
+    }
+
+    // Returns array of selected keywords
+    var getSelectedKeywords = function () {
+        var selectedKeywords = [];
+        $('#search-project-keywords-selected .keyword-label').each(function () {
+            selectedKeywords.push($(this).text().toUpperCase());
+        });
+
+        return selectedKeywords;
+    }
+
+    var unHighlightkeywords = function (){
+        $('#search-project-result .project-keyword').each(function () {
+            $(this).text($(this).text());
+        });
+    }
+
+    // Display possible keywords to choose based on displayed projects and previous keywords selection
+    var displayKeywordChoices = function () {
+        var selectedKeywords = getSelectedKeywords();
+
+        if (selectedKeywords.length === 0) {
+            // Display all keywords
+            $('#search-project-result .project-keyword').removeClass('hide');
+        } else {
+            // Hide all keywords
+            $('#search-project-result .project-keyword').addClass('hide');
+
+            var visibleProjectKeywords = getVisibleProjectsKeywords();
+
+            for (var index = 0; index &lt; visibleProjectKeywords.length; index++) {
+                if (selectedKeywords.indexOf(visibleProjectKeywords[index]) === -1) {
+                    $('#search-project-result .project-keyword.hide').filter(function () {
+                        return ($(this).text().toUpperCase() === visibleProjectKeywords[index]);
+                    }).removeClass('hide');
+                }
+            }
+
+            if (isGraph) {
+                // Hide all keywords
+                $('#search-project-result .project-keyword').addClass('hide');
+                var visibleProjectEdges = getEdges();
+                var selectedKeywords = getSelectedKeywords();
+                var lastSelectedKeyword = selectedKeywords[selectedKeywords.length - 1];
+
+                var hiddenKeywords = $('#search-project-result .project-keyword.hide');
+
+                for (var index = 0; index &lt; hiddenKeywords.length; index++) {
+                    var hiddenKeyword = hiddenKeywords.eq(index);
+
+                    for (var i = 0; i &lt; visibleProjectEdges.length; i++) {
+                        if (visibleProjectEdges[i][0] === lastSelectedKeyword
+                            &amp;&amp; visibleProjectEdges[i][1] === hiddenKeyword.text().toUpperCase()) {
+                            hiddenKeyword.removeClass('hide');
+                        }
+                    }
+                }
+            }
+        }
+        unHighlightkeywords();
+    }
+
+    // Search when user type in
+    $("#search-project").keyup(function () {
+        // Scroll to projects
+        $('html').animate({
+            scrollTop: $("#anchor-top-projects").offset().top - $('#header').height()
+        }, 500);
+
+        var searchedTerm = this.value.trim().toUpperCase();
+
+        // Search by keywords
+        if ($('#toggle-search').text() === '#') {
+            displayKeywordChoices();
+            if (searchedTerm === '' &amp;&amp; getSelectedKeywords().length === 0) {
+                $('#search-project-result .project-keyword').addClass('hide');
+            } else {
+                $('#search-project-result .project-keyword:visible').each(function () {
+                    var keyword = $(this).text().toUpperCase();
+                    // Set keyword visibility and bold on string part found
+                    if (keyword.indexOf(searchedTerm) !== -1) {
+                        var re = new RegExp(searchedTerm, "g");
+                        var keywordHighlighted = keyword.replace(re, '&lt;span class="highlight">' + searchedTerm + '&lt;/span>');
+                        $(this).html(keywordHighlighted.toLowerCase());
+                    } else {
+                        $(this).addClass('hide');
+                    }
+                });
+            }
+        } else { // Search by title
+            // If the search bar is empty, show everything
+            if (searchedTerm === "") {
+                $("#content.container .liz-repository-project-item").show();
+                $("#content.container .liz-repository-title").show();
+            }
+            // Hide everything then show projects and titles corresponding to the search bar
+            else {
+                $("#content.container .liz-repository-project-item").hide();
+                $("#content.container .liz-repository-title").hide();
+
+                $("#content.container li .liz-project-title").filter(function () {
+                    return -1 != $(this).text().toUpperCase().indexOf(searchedTerm);
+                }).closest('.liz-repository-project-item').show();
+
+                $("#content.container li .liz-project-title").filter(function () {
+                    return -1 != $(this).text().toUpperCase().indexOf(searchedTerm);
+                }).closest('.liz-repository-project-list').prev('.liz-repository-title').show();
+
+            }
+        }
+    });
+
+    // Init
+    var isGraph = false;
+    var uniqueKeywordList = getVisibleProjectsKeywords();
+
+    // Activate keywords search if any
+    if (uniqueKeywordList.length > 0){
+        // If at least one keyword contains a slash, we toggle to graph search mode
+        for (var index = 0; index &lt; uniqueKeywordList.length; index++) {
+            var keyword = uniqueKeywordList[index];
+            if (keyword.indexOf('/') !== -1) {
+                isGraph = true;
+                // Get unique keywords in graph mode
+                uniqueKeywordList = getVisibleProjectsKeywords();
+                break;
+            }
+        }
+
+        var keywordsHTML = '';
+        for (var index = 0; index &lt; uniqueKeywordList.length; index++) {
+            keywordsHTML += '&lt;span class="project-keyword hide">' + uniqueKeywordList[index].toLowerCase() + '&lt;/span>';
+        }
+        $('#search-project-result').html(keywordsHTML);
+
+        // Add click handler on project keywords
+        $('.project-keyword').click(function () {
+            // Move keyword in #search-project-keywords-selected
+            $('#search-project-keywords-selected').append('&lt;span class="project-keyword">&lt;span class="keyword-label">' + $(this).text() + '&lt;/span>&lt;span class="remove-keyword">x&lt;/span>&lt;/span>');
+            // Add close event
+            $('#search-project-keywords-selected .remove-keyword').click(function () {
+                $(this).parent().remove();
+                filterProjectsBySelectedKeywords();
+                if ($('#search-project-keywords-selected .remove-keyword').length === 0) {
+                    $('#search-project-result .project-keyword').addClass('hide');
+                } else {
+                    displayKeywordChoices();
+                }
+            });
+            // Hide projects then display projects with selected keyword
+            filterProjectsBySelectedKeywords();
+            // Empty search input
+            $('#search-project').val('')
+            // Display remaining keywords for visible projects not yet selected
+            displayKeywordChoices();
+        });
+    }else{
+        $('#toggle-search').hide().parent().removeClass('input-prepend');
+    }
+}
+
+window.addEventListener('load', function () {
+    searchProjects();
+});
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector.html">ActionSelector</a></li><li><a href="module-Atlas.html">Atlas</a></li><li><a href="module-AttributeTable.html">AttributeTable</a></li><li><a href="module-Attribution.html">Attribution</a></li><li><a href="module-BaseLayer.html">BaseLayer</a></li><li><a href="module-BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseObject.html">BaseObject</a></li><li><a href="module-BottomDock.html">BottomDock</a></li><li><a href="module-Config.html">Config</a></li><li><a href="module-Constants.html">Constants</a></li><li><a href="module-Converters.html">Converters</a></li><li><a href="module-Dataviz.html">Dataviz</a></li><li><a href="module-Digitizing.html">Digitizing</a></li><li><a href="module-Draw.html">Draw</a></li><li><a href="module-Edition.html">Edition</a></li><li><a href="module-Enums.html">Enums</a></li><li><a href="module-Errors.html">Errors</a></li><li><a href="module-Extent.html">Extent</a></li><li><a href="module-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-Filter.html">Filter</a></li><li><a href="module-FormFilter.html">FormFilter</a></li><li><a href="module-FullScreen.html">FullScreen</a></li><li><a href="module-Geolocation.html">Geolocation</a></li><li><a href="module-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Index.html">Index</a></li><li><a href="module-Layer.html">Layer</a></li><li><a href="module-LayerState.html">LayerState</a></li><li><a href="module-LayerTree.html">LayerTree</a></li><li><a href="module-LayerTreeState.html">LayerTreeState</a></li><li><a href="module-LayersOrder.html">LayersOrder</a></li><li><a href="module-Legend.html">Legend</a></li><li><a href="module-Locate.html">Locate</a></li><li><a href="module-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.html">MapState</a></li><li><a href="module-Mask.html">Mask</a></li><li><a href="module-Metadata.html">Metadata</a></li><li><a href="module-MousePosition.html">MousePosition</a></li><li><a href="module-Options.html">Options</a></li><li><a href="module-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom.html">PasteGeom</a></li><li><a href="module-Permalink.html">Permalink</a></li><li><a href="module-Popup.html">Popup</a></li><li><a href="module-Print.html">Print</a></li><li><a href="module-PrintTemplate.html">PrintTemplate</a></li><li><a href="module-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom.html">ReverseGeom</a></li><li><a href="module-Scaleline.html">Scaleline</a></li><li><a href="module-Search.html">Search</a></li><li><a href="module-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping.html">Snapping</a></li><li><a href="module-State.html">State</a></li><li><a href="module-Switch%2520layer%2520actions.html">Switch layer actions</a></li><li><a href="module-SymbologyAction.html">SymbologyAction</a></li><li><a href="module-SymbologyState.html">SymbologyState</a></li><li><a href="module-Theme.html">Theme</a></li><li><a href="module-Time%2520manager.html">Time manager</a></li><li><a href="module-TimeManager.html">TimeManager</a></li><li><a href="module-Tools.html">Tools</a></li><li><a href="module-Tooltip.html">Tooltip</a></li><li><a href="module-Treeview.html">Treeview</a></li><li><a href="module-Utils.html">Utils</a></li><li><a href="module-View.html">View</a></li><li><a href="module-WFS.html">WFS</a></li><li><a href="module-WMS.html">WMS</a></li><li><a href="module-maps.html">maps</a></li></ul><h3>Classes</h3><ul><li><a href="EventDispatcher.html">EventDispatcher</a></li><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector-ActionSelector.html">ActionSelector</a></li><li><a href="module-Action-Action.html">Action</a></li><li><a href="module-AttributeTable.AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-AttributeTable.AttributeLayersConfig.html">AttributeLayersConfig</a></li><li><a href="module-AttributeTable-AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-Attribution.AttributionConfig.html">AttributionConfig</a></li><li><a href="module-Attribution-AttributionConfig.html">AttributionConfig</a></li><li><a href="module-BaseLayer.BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseLayer.BaseLayersConfig.html">BaseLayersConfig</a></li><li><a href="module-BaseLayer.BingBaseLayerConfig.html">BingBaseLayerConfig</a></li><li><a href="module-BaseLayer.EmptyBaseLayerConfig.html">EmptyBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmsBaseLayerConfig.html">WmsBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmtsBaseLayerConfig.html">WmtsBaseLayerConfig</a></li><li><a href="module-BaseLayer.XyzBaseLayerConfig.html">XyzBaseLayerConfig</a></li><li><a href="module-BaseLayerState.BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayerState.BaseLayersState.html">BaseLayersState</a></li><li><a href="module-BaseLayerState.BingBaseLayerState.html">BingBaseLayerState</a></li><li><a href="module-BaseLayerState.EmptyBaseLayerState.html">EmptyBaseLayerState</a></li><li><a href="module-BaseLayerState.WmsBaseLayerState.html">WmsBaseLayerState</a></li><li><a href="module-BaseLayerState.WmtsBaseLayerState.html">WmtsBaseLayerState</a></li><li><a href="module-BaseLayerState.XyzBaseLayerState.html">XyzBaseLayerState</a></li><li><a href="module-BaseLayers-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseLayer-BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectConfig.html">BaseObjectConfig</a></li><li><a href="module-BaseObject.BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectLayersConfig.html">BaseObjectLayersConfig</a></li><li><a href="module-BaseObject-BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-Config.Config.html">Config</a></li><li><a href="module-Config-Config.html">Config</a></li><li><a href="module-Dataviz.DatavizElementConfig.html">DatavizElementConfig</a></li><li><a href="module-Dataviz.DatavizLayersConfig.html">DatavizLayersConfig</a></li><li><a href="module-Dataviz.DatavizOptionsConfig.html">DatavizOptionsConfig</a></li><li><a href="module-Dataviz.DatavizPlotConfig.html">DatavizPlotConfig</a></li><li><a href="module-Dataviz.DatavizTraceConfig.html">DatavizTraceConfig</a></li><li><a href="module-Digitizing-Digitizing.html">Digitizing</a></li><li><a href="module-Draw-Draw.html">Draw</a></li><li><a href="module-Edition.EditionCapabilitiesConfig.html">EditionCapabilitiesConfig</a></li><li><a href="module-Edition.EditionLayerConfig.html">EditionLayerConfig</a></li><li><a href="module-Edition.EditionLayersConfig.html">EditionLayersConfig</a></li><li><a href="module-Edition-Edition.html">Edition</a></li><li><a href="module-Errors-ConversionError.html">ConversionError</a></li><li><a href="module-Errors-HttpError.html">HttpError</a></li><li><a href="module-Errors-PropertyRequiredError.html">PropertyRequiredError</a></li><li><a href="module-Errors-ValidationError.html">ValidationError</a></li><li><a href="module-Extent.Extent.html">Extent</a></li><li><a href="module-FeatureStorage-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-FormFilter.FormFilterConfig.html">FormFilterConfig</a></li><li><a href="module-FormFilter.FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FormFilter-FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FullScreen-FullScreen.html">FullScreen</a></li><li><a href="module-GeolocationSurvey-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Geolocation-Geolocation.html">Geolocation</a></li><li><a href="module-Layer.LayerConfig.html">LayerConfig</a></li><li><a href="module-Layer.LayersConfig.html">LayersConfig</a></li><li><a href="module-LayerState.LayerGroupState.html">LayerGroupState</a></li><li><a href="module-LayerState.LayerItemState.html">LayerItemState</a></li><li><a href="module-LayerState.LayerLayerState.html">LayerLayerState</a></li><li><a href="module-LayerState.LayerRasterState.html">LayerRasterState</a></li><li><a href="module-LayerState.LayerVectorState.html">LayerVectorState</a></li><li><a href="module-LayerState.LayersAndGroupsCollection.html">LayersAndGroupsCollection</a></li><li><a href="module-LayerTree.LayerBoundingBoxConfig.html">LayerBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerGeographicBoundingBoxConfig.html">LayerGeographicBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerStyleConfig.html">LayerStyleConfig</a></li><li><a href="module-LayerTree.LayerTreeGroupConfig.html">LayerTreeGroupConfig</a></li><li><a href="module-LayerTree.LayerTreeItemConfig.html">LayerTreeItemConfig</a></li><li><a href="module-LayerTree.LayerTreeLayerConfig.html">LayerTreeLayerConfig</a></li><li><a href="module-LayerTreeState.LayerTreeGroupState.html">LayerTreeGroupState</a></li><li><a href="module-LayerTreeState.LayerTreeItemState.html">LayerTreeItemState</a></li><li><a href="module-LayerTreeState.LayerTreeLayerState.html">LayerTreeLayerState</a></li><li><a href="module-Legend-Legend.html">Legend</a></li><li><a href="module-Locate.LocateByLayerConfig.html">LocateByLayerConfig</a></li><li><a href="module-Locate.LocateLayerConfig.html">LocateLayerConfig</a></li><li><a href="module-MGRS-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.MapGroupState.html">MapGroupState</a></li><li><a href="module-MapLayerState.MapItemState.html">MapItemState</a></li><li><a href="module-MapLayerState.MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.MapState.html">MapState</a></li><li><a href="module-Mask-Mask.html">Mask</a></li><li><a href="module-Metadata.MetadataConfig.html">MetadataConfig</a></li><li><a href="module-MousePosition-MousePosition.html">MousePosition</a></li><li><a href="module-Options.OptionsConfig.html">OptionsConfig</a></li><li><a href="module-OverviewMap-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom-pasteGeom.html">pasteGeom</a></li><li><a href="module-Permalink-Permalink.html">Permalink</a></li><li><a href="module-Popup-Popup.html">Popup</a></li><li><a href="module-PrintTemplate.PrintAtlasConfig.html">PrintAtlasConfig</a></li><li><a href="module-PrintTemplate.PrintLabelConfig.html">PrintLabelConfig</a></li><li><a href="module-PrintTemplate.PrintMapConfig.html">PrintMapConfig</a></li><li><a href="module-PrintTemplate.PrintTemplateConfig.html">PrintTemplateConfig</a></li><li><a href="module-Print-Print.html">Print</a></li><li><a href="module-ProxyEvents-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom-reverseGeom.html">reverseGeom</a></li><li><a href="module-Scaleline-Scaleline.html">Scaleline</a></li><li><a href="module-Search-Search.html">Search</a></li><li><a href="module-SelectionInvert-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping-Snapping.html">Snapping</a></li><li><a href="module-State.State.html">State</a></li><li><a href="module-State-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-State-SelectionTool.html">SelectionTool</a></li><li><a href="module-State-State.html">State</a></li><li><a href="module-SymbologyState.BaseIconSymbology.html">BaseIconSymbology</a></li><li><a href="module-SymbologyState.BaseObjectSymbology.html">BaseObjectSymbology</a></li><li><a href="module-SymbologyState.BaseSymbolsSymbology.html">BaseSymbolsSymbology</a></li><li><a href="module-SymbologyState.LayerGroupSymbology.html">LayerGroupSymbology</a></li><li><a href="module-SymbologyState.LayerIconSymbology.html">LayerIconSymbology</a></li><li><a href="module-SymbologyState.LayerSymbolsSymbology.html">LayerSymbolsSymbology</a></li><li><a href="module-SymbologyState.SymbolIconSymbology.html">SymbolIconSymbology</a></li><li><a href="module-SymbologyState.SymbolRuleSymbology.html">SymbolRuleSymbology</a></li><li><a href="module-Theme.LayerThemeConfig.html">LayerThemeConfig</a></li><li><a href="module-Theme.ThemeConfig.html">ThemeConfig</a></li><li><a href="module-Theme.ThemesConfig.html">ThemesConfig</a></li><li><a href="module-TimeManager.TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-TimeManager.TimeManagerLayersConfig.html">TimeManagerLayersConfig</a></li><li><a href="module-TimeManager-TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayerConfig.html">TooltipLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayersConfig.html">TooltipLayersConfig</a></li><li><a href="module-Treeview-Treeview.html">Treeview</a></li><li><a href="module-Utils-Utils.html">Utils</a></li><li><a href="module-WFS-WFS.html">WFS</a></li><li><a href="module-WMS-WMS.html">WMS</a></li><li><a href="module-maps-map.html">map</a></li></ul><h3>Events</h3><ul><li><a href="module-Action.html#~event:actionResultReceived">actionResultReceived</a></li><li><a href="global.html#event:beforetreecreated">beforetreecreated</a></li><li><a href="global.html#event:layersadded">layersadded</a></li><li><a href="global.html#event:mapcreated">mapcreated</a></li><li><a href="global.html#event:treecreated">treecreated</a></li></ul><h3>Global</h3><ul><li><a href="global.html#addListener">addListener</a></li><li><a href="global.html#dispatch">dispatch</a></li><li><a href="global.html#removeListener">removeListener</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.2</a> on Wed Feb 14 2024 14:50:29 GMT+0100 (Central European Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

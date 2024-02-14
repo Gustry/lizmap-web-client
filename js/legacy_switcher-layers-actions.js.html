@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: legacy/switcher-layers-actions.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: legacy/switcher-layers-actions.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module legacy/switch-layers-actions.js
+ * @name Switch layer actions
+ * @copyright 2023 3Liz
+ * @license MPL-2.0
+ */
+
+var lizLayerActionButtons = function() {
+
+    var tooltipControl = null;
+    var tooltipLayers = [];
+    var featureTypes = null;
+
+    /**
+     *
+     * @param html
+     */
+    function fillSubDock( html ){
+        $('#sub-dock').html( html );
+
+        // Style opacity button
+        $('#sub-dock a.btn-opacity-layer').each(function(){
+            var v = $(this).text();
+            var op = parseInt(v) / 100 - 0.3;
+            $(this).css('background-color', 'rgba(0,0,0,'+op+')' );
+            $(this).css('background-image', 'none');
+            $(this).css('text-shadow', 'none');
+            if( parseInt(v) > 60 )
+                $(this).css('color', 'lightgrey');
+        });
+
+        // activate link buttons
+        $('div.sub-metadata button.link')
+            .click(function(){
+                var self = $(this);
+                if (self.hasClass('disabled'))
+                    return false;
+                var windowLink = self.val();
+                // Test if the link is internal
+                var mediaRegex = /^(\/)?media\//;
+                if(mediaRegex.test(windowLink)){
+                    var mediaLink = lizUrls.media + '?' + new URLSearchParams(lizUrls.params);
+                    windowLink = mediaLink+'&amp;path=/'+windowLink;
+                }
+                // Open link in a new window
+                window.open(windowLink);
+            });
+
+        $('#hide-sub-dock').click(function(){
+            var itemName = $(this).val();
+            var itemConfig = lizMap.config.layers[itemName];
+            var itemType = 'baselayer';
+            if('type' in itemConfig)
+                itemType = itemConfig.type;
+
+            lizMap.events.triggerEvent("lizmapswitcheritemselected",
+                { 'name': itemName, 'type': itemType, 'selected': false}
+            );
+
+            document.querySelector('lizmap-treeview').itemNameSelected = undefined;
+        });
+    }
+
+    /**
+     *
+     * @param aName
+     */
+    function getLayerMetadataHtml( aName ){
+        var html = '';
+        var metadatas = {
+            title: aName,
+            type: 'layer',
+            abstract: null,
+            link: null,
+            styles: null,
+            isBaselayer: false,
+            actions: null
+        };
+        if( aName in lizMap.config.layers ){
+            var layerConfig = lizMap.config.layers[aName];
+            metadatas.title = layerConfig.title;
+            metadatas.type = layerConfig.type;
+            if( layerConfig.abstract )
+                metadatas.abstract = layerConfig.abstract;
+            if( layerConfig.link  )
+                metadatas.link = layerConfig.link;
+            if( layerConfig.styles &amp;&amp; layerConfig.styles.length > 1 )
+                metadatas.styles = layerConfig.styles
+
+            // Add actions
+            let layerActions = lizMap.mainLizmap.action.getActions('layer', layerConfig.id);
+            if (layerActions.length) metadatas.actions = layerActions;
+
+        }
+        if( lizMap.mainLizmap.map.getActiveBaseLayer()?.get("name") == aName ){
+            metadatas.type = 'layer';
+            metadatas.isBaselayer = true;
+        }
+
+        if( metadatas ){
+            var layerConfig = lizMap.config.layers[aName];
+
+            // Header
+            html+= '&lt;div class="sub-metadata">';
+            html+= '&lt;h3>';
+            html+='    &lt;span class="title">';
+            html+='        &lt;span class="icon">&lt;/span>';
+            html+='        &lt;span class="text">'+lizDict['layer.metadata.title']+'&lt;/span>';
+            html+='    &lt;/span>';
+            html+='&lt;/h3>';
+
+            // Content
+            html+= '&lt;div class="menu-content">';
+
+            // Metadata
+            html+= '    &lt;dl class="dl-vertical" style="font-size:0.8em;">';
+            html+= '        &lt;dt>'+lizDict['layer.metadata.layer.name']+'&lt;/dt>';
+            html+= '        &lt;dd>'+metadatas.title+'&lt;/dd>';
+            html+= '        &lt;dt>'+lizDict['layer.metadata.layer.type']+'&lt;/dt>';
+            html+= '        &lt;dd>'+lizDict['layer.metadata.layer.type.' + metadatas.type]+'&lt;/dd>';
+
+            // Zoom
+            html+= '        &lt;dt>'+lizDict['layer.metadata.zoomToExtent.title']+'&lt;/dt>';
+            html+= '&lt;dd>&lt;button class="btn btn-mini layerActionZoom" title="'+lizDict['layer.metadata.zoomToExtent.title']+'" value="'+aName+'">&lt;i class="icon-zoom-in">&lt;/i>&lt;/button>&lt;/dd>';
+
+            // Tools
+            var isBaselayer = '';
+            if(metadatas.isBaselayer){
+                isBaselayer = 'baselayer';
+            }
+
+            // Styles
+            if( metadatas.styles ){
+                const layer = lizMap.mainLizmap.state.rootMapGroup.getMapLayerByName(aName);
+                options = '';
+                for( var st in metadatas.styles ){
+                    st = metadatas.styles[st];
+                    if( st == layer.wmsSelectedStyleName )
+                        options += '&lt;option value="'+st+'" selected>'+st+'&lt;/option>';
+                    else
+                        options += '&lt;option value="'+st+'">'+st+'&lt;/option>';
+                }
+                if( options != '' ){
+                    html+= '        &lt;dt>'+lizDict['layer.metadata.style.title']+'&lt;/dt>';
+                    html+= '&lt;dd>';
+                    html+= '&lt;input type="hidden" class="styleLayer '+isBaselayer+'" value="'+aName+'">';
+                    html+= '&lt;select class="styleLayer '+isBaselayer+'">';
+                    html+= options;
+                    html+= '&lt;/select>';
+                    html+= '&lt;/dd>';
+                }
+            }
+
+            // Opacity
+            html+= '        &lt;dt>'+lizDict['layer.metadata.opacity.title']+'&lt;/dt>';
+            html+= '&lt;dd>';
+            html+= '&lt;input type="hidden" class="opacityLayer '+isBaselayer+'" value="'+aName+'">';
+
+            const currentOpacity = lizMap.mainLizmap.state.layersAndGroupsCollection.getLayerOrGroupByName(aName).opacity;
+            var opacities = lizMap.config.options.layersOpacities;
+            if(typeof opacities === 'undefined') {
+                opacities = [0.2, 0.4, 0.6, 0.8, 1];
+            }
+            for ( var i=0, len=opacities.length; i&lt;len; i++ ) {
+                var oactive = '';
+                if(currentOpacity == opacities[i])
+                    oactive = 'active';
+                html+= '&lt;a href="#" class="btn btn-mini btn-opacity-layer '+ oactive+' '+ opacities[i]*100+'">'+opacities[i]*100+'&lt;/a>';
+            }
+            html+= '&lt;/dd>';
+
+            // Export
+            if ( 'exportLayers' in lizMap.config.options
+                &amp;&amp; lizMap.config.options.exportLayers == 'True'
+                &amp;&amp; featureTypes != null
+                &amp;&amp; featureTypes.length != 0 ) {
+                var exportFormats = lizMap.getVectorLayerResultFormat();
+                var options = '';
+                for ( const format of exportFormats ) {
+                    options += '&lt;option value="'+format+'">'+format+'&lt;/option>';
+                }
+                // Export layer
+                // Only if layer is in attribute table
+                if( options != '' &amp;&amp; layerConfig.typename != undefined) {
+                    html+= '        &lt;dt>'+lizDict['layer.metadata.export.title']+'&lt;/dt>';
+                    html+= '&lt;dd>';
+                    html+= '&lt;select class="exportLayer '+isBaselayer+'">';
+                    html+= options;
+                    html+= '&lt;/select>';
+                    html+= '&lt;button class="btn btn-mini exportLayer '+isBaselayer+'" title="'+lizDict['layer.metadata.export.title']+'" value="'+aName+'">&lt;i class="icon-download">&lt;/i>&lt;/button>';
+                    html+= '&lt;/dd>';
+                }
+            }
+
+            if( metadatas.abstract ){
+                html+= '        &lt;dt>'+lizDict['layer.metadata.layer.abstract']+'&lt;/dt>';
+                html+= '        &lt;dd>'+metadatas.abstract+'&lt;/dd>';
+            }
+
+            // Actions
+            if (metadatas.actions) {
+                html+= '        &lt;dt>'+lizDict['action.title']+'&lt;/dt>';
+                html += `
+                &lt;div class="layer-action-selector-container">
+                    &lt;lizmap-action-selector id="lizmap-layer-action-${layerConfig.id}" title="${lizDict['action.form.select.help']}"
+                        no-selection-warning="${lizDict['action.form.select.warning']}"
+                        action-scope="layer" action-layer-id="${layerConfig.id}"
+                    >&lt;/lizmap-action-selector>
+                &lt;div>
+                `;
+            }
+
+            html+= '    &lt;/dl>';
+
+            // Link
+            if( metadatas.link  ){
+                html+= '    &lt;button class="btn link layer-info" name="link" title="'+lizDict['layer.metadata.layer.info.see']+'" value="'+metadatas.link+'">'+lizDict['layer.metadata.layer.info.see']+'&lt;/button>';
+            }
+
+            // Style
+            html+= '&lt;/div>';
+            html+= '&lt;/div>';
+            html+= '&lt;button id="hide-sub-dock" class="btn btn-mini pull-right" name="close" title="'+lizDict['generic.btn.close.title']+'" value="'+aName+'">'+lizDict['generic.btn.close.title']+'&lt;/button>';
+        }
+
+        return html;
+    }
+
+    /**
+     *
+     * @param layerName
+     * @param selected
+     */
+    function toggleMetadataSubDock(layerName, selected){
+        if( selected ){
+            var html = getLayerMetadataHtml( layerName );
+            fillSubDock( html );
+        }else{
+            $('#sub-dock').hide().html( '' );
+            return;
+        }
+
+        var subDockVisible = ( $('#sub-dock').css('display') != 'none' );
+        if( !subDockVisible ){
+            $('#sub-dock').show();
+        }
+    }
+
+    lizMap.events.on({
+
+        'uicreated': function(){
+
+            // Display theme switcher if any
+            if ('themes' in lizMap.config){
+                var themes = lizMap.config.themes;
+                var themeSelector = '&lt;div id="theme-selector" class="btn-group" role="group">';
+                themeSelector += '&lt;button class="btn btn-mini dropdown-toggle" data-toggle="dropdown" type="button" title="' + lizDict['switcherLayersActions.themeSelector.title'] +'" href="#">&lt;i class="icon-none qgis_sprite mActionShowAllLayers">&lt;/i>&lt;span class="caret">&lt;/span>&lt;/button>';
+                themeSelector += '&lt;ul class="dropdown-menu dropdown-menu-right" role="menu" aria-labelledby="dropdownMenu">';
+
+                for (var themeName in themes) {
+                    themeSelector += '&lt;li class="theme">&lt;a href="#">' + themeName + '&lt;/a>&lt;/li>';
+                }
+
+                themeSelector += '&lt;/ul>';
+                themeSelector += '&lt;/div>';
+
+                $('#switcher-layers-actions').prepend(themeSelector);
+
+                // Handle theme switching
+                $('#theme-selector').on('click', '.theme', function () {
+                    // Set theme as selected
+                    $('#theme-selector .theme').removeClass('selected');
+                    $(this).addClass('selected');
+
+                    const themeNameSelected = $(this).text();
+
+                    if (themeNameSelected in lizMap.config.themes){
+                        const themeSelected = lizMap.config.themes[themeNameSelected];
+
+                        // Set checked state
+                        for(const layerOrGroup of lizMap.mainLizmap.state.layerTree.findTreeLayersAndGroups()){
+                            if(layerOrGroup.type === "group"){
+                                layerOrGroup.checked = themeSelected?.checkedGroupNode !== undefined &amp;&amp; themeSelected.checkedGroupNode.includes(layerOrGroup.name);
+                                layerOrGroup.expanded = themeSelected?.expandedGroupNode !== undefined &amp;&amp; themeSelected.expandedGroupNode.includes(layerOrGroup.name);
+                            } else {
+                                layerOrGroup.checked = themeSelected?.layers &amp;&amp; Object.hasOwn(themeSelected.layers, layerOrGroup.layerConfig.id);
+                                layerOrGroup.expanded = themeSelected?.layers &amp;&amp; Object.hasOwn(themeSelected.layers, layerOrGroup.layerConfig.id) &amp;&amp; themeSelected.layers[layerOrGroup.layerConfig.id]?.expanded === "1";
+                                const style = themeSelected?.layers?.[layerOrGroup.layerConfig.id]?.style;
+                                if (style) {
+                                    layerOrGroup.wmsSelectedStyleName = style;
+                                }
+                            }
+                        }
+
+                        // Trigger map theme event
+                        lizMap.events.triggerEvent("mapthemechanged",
+                            {
+                                'name': themeNameSelected,
+                                'config': themeSelected
+                            }
+                        );
+                    }
+                    $('#theme-selector.open').click();
+                    return false;
+                });
+
+                // Trigger event with the list of mapThemes
+                lizMap.events.triggerEvent("mapthemesadded",
+                    {
+                        'themes': themes
+                    }
+                );
+
+                // Activate first map theme on load
+                if ('activateFirstMapTheme' in lizMap.config.options &amp;&amp; lizMap.config.options.activateFirstMapTheme == 'True') {
+                    $('#theme-selector li.theme:nth-child(1)').click();
+                }
+            }
+
+            featureTypes = lizMap.getVectorLayerFeatureTypes();
+
+            // title tooltip
+            $('#switcher-layers-actions .btn, #get-baselayer-metadata').tooltip({
+                placement: 'bottom'
+            });
+
+            // Expand all or unfold all
+            document.getElementById('layers-unfold-all').addEventListener('click', () => {
+                document.querySelectorAll('lizmap-treeview .expandable').forEach(element => element.classList.add('expanded'));
+            });
+            document.getElementById('layers-fold-all').addEventListener('click', () => {
+                document.querySelectorAll('lizmap-treeview .expandable').forEach(element => element.classList.remove('expanded'));
+            });
+
+            // Activate get-baselayer-metadata button
+            $('#get-baselayer-metadata').click(function(){
+
+                $('#hide-sub-dock').click();
+
+                const activeBaseLayerName = lizMap.mainLizmap.map.getActiveBaseLayer().get("name");
+                if( !activeBaseLayerName ){
+                    return false;
+                }
+
+                lizMap.events.triggerEvent("lizmapswitcheritemselected",
+                    { 'name': activeBaseLayerName, 'type': 'baselayer', 'selected': true}
+                );
+                return false;
+            });
+
+            // Zoom
+            $('#content').on('click', 'button.layerActionZoom', function(){
+                var layerName = $(this).val();
+                if( !layerName ){
+                    return false;
+                }
+
+                var itemConfig = lizMap.config.layers[layerName];
+                if( itemConfig.type == 'baselayer' )
+                    lizMap.map.zoomToMaxExtent();
+
+                var mapProjection = lizMap.map.getProjection();
+                if(mapProjection == 'EPSG:900913')
+                    mapProjection = 'EPSG:3857';
+
+                /*if( !( 'bbox' in itemConfig ) || !( mapProjection in itemConfig['bbox'] ) ){
+                    console.log('The layer bbox information has not been found in config');
+                    console.log(itemConfig);
+                    return false;
+                }*/
+
+                /*var lex = itemConfig['bbox'][mapProjection]['bbox'];
+                var lBounds = new OpenLayers.Bounds(
+                    lex[0],
+                    lex[1],
+                    lex[2],
+                    lex[3]
+                );*/
+
+                if ( !('extent' in itemConfig) ) {
+                    console.log('The layer extent information has not been found in config');
+                    console.log(itemConfig);
+                    return false;
+                }
+                if ( !('crs' in itemConfig) ) {
+                    console.log('The layer crs information has not been found in config');
+                    console.log(itemConfig);
+                    return false;
+                }
+                var lBounds = OpenLayers.Bounds.fromArray(itemConfig['extent']);
+                lBounds = lBounds.transform(itemConfig['crs'],mapProjection);
+
+                // Reverse axis
+                /*if (OpenLayers.Projection.defaults[mapProjection] &amp;&amp;
+                    OpenLayers.Projection.defaults[mapProjection].yx) {
+                    lBounds = new OpenLayers.Bounds(
+                        lex[1],
+                        lex[0],
+                        lex[3],
+                        lex[2]
+                    );
+                }*/
+                lizMap.map.zoomToExtent( lBounds );
+
+                return false;
+            });
+
+            // Styles
+            $('#content').on('change', 'select.styleLayer', function(){
+
+                // Get chosen style
+                var eStyle = $(this).val();
+
+                // Get layer name and type
+                var h = $(this).parent().find('input.styleLayer');
+                var name = h.val();
+                var isBaselayer = h.hasClass('baselayer');
+                if( !name )
+                    return false;
+
+                // Get layer
+                let layer;
+                if (isBaselayer) {
+                    layer = lizMap.map.baseLayer;
+                } else {
+                    layer = lizMap.mainLizmap.state.rootMapGroup.getMapLayerByName(name);
+                }
+
+                // Set style
+                layer.wmsSelectedStyleName = eStyle;
+            });
+
+            // Opacity
+            $('#content').on('click', 'a.btn-opacity-layer', function(){
+
+                // Get chosen opacity
+                var eVal = $(this).text();
+                var opacity = parseInt(eVal) / 100;
+
+                // Get layer name and type
+                var h = $(this).parent().find('input.opacityLayer');
+                var eName = h.val();
+                if( !eName ){
+                    return false;
+                }
+
+                // Get layer
+                const layer = lizMap.mainLizmap.state.layersAndGroupsCollection.getLayerOrGroupByName(eName);
+
+                // Set opacity
+                if( layer ) {
+                    layer.opacity = opacity;
+                    $('a.btn-opacity-layer').removeClass('active');
+                    $('a.btn-opacity-layer.' + opacity*100).addClass('active');
+                }
+
+                // Blur dropdown or baselayer button
+                $('#switcher').click();
+
+                return false;
+            });
+
+            // Export
+            $('#sub-dock').on('click', 'button.exportLayer', function(){
+                var eName = $(this).val();
+                var eFormat = $(this).parent().find('select.exportLayer').val();
+                lizMap.exportVectorLayer( eName, eFormat );
+                return false;
+            });
+
+            // Cancel Lizmap global filter
+            $('#layerActionUnfilter').click(function(){
+                var layerName = lizMap.lizmapLayerFilterActive;
+                if( !layerName )
+                    return false;
+
+                lizMap.events.triggerEvent("layerfeatureremovefilter",
+                    { 'featureType': layerName}
+                );
+                lizMap.lizmapLayerFilterActive = null;
+                $(this).hide();
+
+                return false;
+            });
+
+            lizMap.events.on({
+                dockclosed: function(e) {
+                    if ( e.id == 'switcher' ) {
+                        $('#hide-sub-dock').click();
+                    }
+                },
+                lizmapbaselayerchanged: function(e) {
+                    if ( $('#sub-dock').is(':visible') ) {
+                        var subDockLayer = $('#hide-sub-dock').val();
+                        if ( $('#switcher-baselayer-select').find('option[value="'+subDockLayer+'"]').length != 0 ) {
+                            if ( subDockLayer != $('#switcher-baselayer-select').val() ) {
+                                lizMap.events.triggerEvent("lizmapswitcheritemselected",
+                                    { 'name': e.layer.name, 'type': 'baselayer', 'selected': true}
+                                );
+                            }
+                        }
+                    }
+                }
+            });
+
+        },
+        'lizmapswitcheritemselected': function(evt){
+
+            // Get item properties
+            var itemName = evt.name;
+            var itemType = evt.type;
+            var itemSelected = evt.selected;
+            var itemConfig = {};
+            // Get item Lizmap config
+            if( itemType == 'baselayer'){
+                var layerName = lizMap.getLayerNameByCleanName( lizMap.cleanName(itemName) );
+                if( layerName ){
+                    itemName = layerName;
+                }
+            } else {
+                itemConfig = lizMap.config.layers[itemName];
+            }
+
+            // Change action buttons values
+            var btValue = itemName;
+            if( !itemSelected )
+                btValue = '';
+            $('#switcher-layers-actions button').val( btValue );
+
+            // Toggle buttons depending on itemType
+
+            // Zoom to layer
+            var zoomStatus = (!itemSelected || !('bbox' in itemConfig) );
+            $('button.layerActionZoom').attr( 'disable', zoomStatus ).toggleClass( 'disabled', zoomStatus );
+
+            // Refresh sub-dock content
+            toggleMetadataSubDock(itemName, itemSelected);
+        }
+    });
+}();
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector.html">ActionSelector</a></li><li><a href="module-Atlas.html">Atlas</a></li><li><a href="module-AttributeTable.html">AttributeTable</a></li><li><a href="module-Attribution.html">Attribution</a></li><li><a href="module-BaseLayer.html">BaseLayer</a></li><li><a href="module-BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseObject.html">BaseObject</a></li><li><a href="module-BottomDock.html">BottomDock</a></li><li><a href="module-Config.html">Config</a></li><li><a href="module-Constants.html">Constants</a></li><li><a href="module-Converters.html">Converters</a></li><li><a href="module-Dataviz.html">Dataviz</a></li><li><a href="module-Digitizing.html">Digitizing</a></li><li><a href="module-Draw.html">Draw</a></li><li><a href="module-Edition.html">Edition</a></li><li><a href="module-Enums.html">Enums</a></li><li><a href="module-Errors.html">Errors</a></li><li><a href="module-Extent.html">Extent</a></li><li><a href="module-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-Filter.html">Filter</a></li><li><a href="module-FormFilter.html">FormFilter</a></li><li><a href="module-FullScreen.html">FullScreen</a></li><li><a href="module-Geolocation.html">Geolocation</a></li><li><a href="module-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Index.html">Index</a></li><li><a href="module-Layer.html">Layer</a></li><li><a href="module-LayerState.html">LayerState</a></li><li><a href="module-LayerTree.html">LayerTree</a></li><li><a href="module-LayerTreeState.html">LayerTreeState</a></li><li><a href="module-LayersOrder.html">LayersOrder</a></li><li><a href="module-Legend.html">Legend</a></li><li><a href="module-Locate.html">Locate</a></li><li><a href="module-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.html">MapState</a></li><li><a href="module-Mask.html">Mask</a></li><li><a href="module-Metadata.html">Metadata</a></li><li><a href="module-MousePosition.html">MousePosition</a></li><li><a href="module-Options.html">Options</a></li><li><a href="module-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom.html">PasteGeom</a></li><li><a href="module-Permalink.html">Permalink</a></li><li><a href="module-Popup.html">Popup</a></li><li><a href="module-Print.html">Print</a></li><li><a href="module-PrintTemplate.html">PrintTemplate</a></li><li><a href="module-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom.html">ReverseGeom</a></li><li><a href="module-Scaleline.html">Scaleline</a></li><li><a href="module-Search.html">Search</a></li><li><a href="module-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping.html">Snapping</a></li><li><a href="module-State.html">State</a></li><li><a href="module-Switch%2520layer%2520actions.html">Switch layer actions</a></li><li><a href="module-SymbologyAction.html">SymbologyAction</a></li><li><a href="module-SymbologyState.html">SymbologyState</a></li><li><a href="module-Theme.html">Theme</a></li><li><a href="module-Time%2520manager.html">Time manager</a></li><li><a href="module-TimeManager.html">TimeManager</a></li><li><a href="module-Tools.html">Tools</a></li><li><a href="module-Tooltip.html">Tooltip</a></li><li><a href="module-Treeview.html">Treeview</a></li><li><a href="module-Utils.html">Utils</a></li><li><a href="module-View.html">View</a></li><li><a href="module-WFS.html">WFS</a></li><li><a href="module-WMS.html">WMS</a></li><li><a href="module-maps.html">maps</a></li></ul><h3>Classes</h3><ul><li><a href="EventDispatcher.html">EventDispatcher</a></li><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector-ActionSelector.html">ActionSelector</a></li><li><a href="module-Action-Action.html">Action</a></li><li><a href="module-AttributeTable.AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-AttributeTable.AttributeLayersConfig.html">AttributeLayersConfig</a></li><li><a href="module-AttributeTable-AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-Attribution.AttributionConfig.html">AttributionConfig</a></li><li><a href="module-Attribution-AttributionConfig.html">AttributionConfig</a></li><li><a href="module-BaseLayer.BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseLayer.BaseLayersConfig.html">BaseLayersConfig</a></li><li><a href="module-BaseLayer.BingBaseLayerConfig.html">BingBaseLayerConfig</a></li><li><a href="module-BaseLayer.EmptyBaseLayerConfig.html">EmptyBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmsBaseLayerConfig.html">WmsBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmtsBaseLayerConfig.html">WmtsBaseLayerConfig</a></li><li><a href="module-BaseLayer.XyzBaseLayerConfig.html">XyzBaseLayerConfig</a></li><li><a href="module-BaseLayerState.BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayerState.BaseLayersState.html">BaseLayersState</a></li><li><a href="module-BaseLayerState.BingBaseLayerState.html">BingBaseLayerState</a></li><li><a href="module-BaseLayerState.EmptyBaseLayerState.html">EmptyBaseLayerState</a></li><li><a href="module-BaseLayerState.WmsBaseLayerState.html">WmsBaseLayerState</a></li><li><a href="module-BaseLayerState.WmtsBaseLayerState.html">WmtsBaseLayerState</a></li><li><a href="module-BaseLayerState.XyzBaseLayerState.html">XyzBaseLayerState</a></li><li><a href="module-BaseLayers-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseLayer-BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectConfig.html">BaseObjectConfig</a></li><li><a href="module-BaseObject.BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectLayersConfig.html">BaseObjectLayersConfig</a></li><li><a href="module-BaseObject-BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-Config.Config.html">Config</a></li><li><a href="module-Config-Config.html">Config</a></li><li><a href="module-Dataviz.DatavizElementConfig.html">DatavizElementConfig</a></li><li><a href="module-Dataviz.DatavizLayersConfig.html">DatavizLayersConfig</a></li><li><a href="module-Dataviz.DatavizOptionsConfig.html">DatavizOptionsConfig</a></li><li><a href="module-Dataviz.DatavizPlotConfig.html">DatavizPlotConfig</a></li><li><a href="module-Dataviz.DatavizTraceConfig.html">DatavizTraceConfig</a></li><li><a href="module-Digitizing-Digitizing.html">Digitizing</a></li><li><a href="module-Draw-Draw.html">Draw</a></li><li><a href="module-Edition.EditionCapabilitiesConfig.html">EditionCapabilitiesConfig</a></li><li><a href="module-Edition.EditionLayerConfig.html">EditionLayerConfig</a></li><li><a href="module-Edition.EditionLayersConfig.html">EditionLayersConfig</a></li><li><a href="module-Edition-Edition.html">Edition</a></li><li><a href="module-Errors-ConversionError.html">ConversionError</a></li><li><a href="module-Errors-HttpError.html">HttpError</a></li><li><a href="module-Errors-PropertyRequiredError.html">PropertyRequiredError</a></li><li><a href="module-Errors-ValidationError.html">ValidationError</a></li><li><a href="module-Extent.Extent.html">Extent</a></li><li><a href="module-FeatureStorage-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-FormFilter.FormFilterConfig.html">FormFilterConfig</a></li><li><a href="module-FormFilter.FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FormFilter-FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FullScreen-FullScreen.html">FullScreen</a></li><li><a href="module-GeolocationSurvey-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Geolocation-Geolocation.html">Geolocation</a></li><li><a href="module-Layer.LayerConfig.html">LayerConfig</a></li><li><a href="module-Layer.LayersConfig.html">LayersConfig</a></li><li><a href="module-LayerState.LayerGroupState.html">LayerGroupState</a></li><li><a href="module-LayerState.LayerItemState.html">LayerItemState</a></li><li><a href="module-LayerState.LayerLayerState.html">LayerLayerState</a></li><li><a href="module-LayerState.LayerRasterState.html">LayerRasterState</a></li><li><a href="module-LayerState.LayerVectorState.html">LayerVectorState</a></li><li><a href="module-LayerState.LayersAndGroupsCollection.html">LayersAndGroupsCollection</a></li><li><a href="module-LayerTree.LayerBoundingBoxConfig.html">LayerBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerGeographicBoundingBoxConfig.html">LayerGeographicBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerStyleConfig.html">LayerStyleConfig</a></li><li><a href="module-LayerTree.LayerTreeGroupConfig.html">LayerTreeGroupConfig</a></li><li><a href="module-LayerTree.LayerTreeItemConfig.html">LayerTreeItemConfig</a></li><li><a href="module-LayerTree.LayerTreeLayerConfig.html">LayerTreeLayerConfig</a></li><li><a href="module-LayerTreeState.LayerTreeGroupState.html">LayerTreeGroupState</a></li><li><a href="module-LayerTreeState.LayerTreeItemState.html">LayerTreeItemState</a></li><li><a href="module-LayerTreeState.LayerTreeLayerState.html">LayerTreeLayerState</a></li><li><a href="module-Legend-Legend.html">Legend</a></li><li><a href="module-Locate.LocateByLayerConfig.html">LocateByLayerConfig</a></li><li><a href="module-Locate.LocateLayerConfig.html">LocateLayerConfig</a></li><li><a href="module-MGRS-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.MapGroupState.html">MapGroupState</a></li><li><a href="module-MapLayerState.MapItemState.html">MapItemState</a></li><li><a href="module-MapLayerState.MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.MapState.html">MapState</a></li><li><a href="module-Mask-Mask.html">Mask</a></li><li><a href="module-Metadata.MetadataConfig.html">MetadataConfig</a></li><li><a href="module-MousePosition-MousePosition.html">MousePosition</a></li><li><a href="module-Options.OptionsConfig.html">OptionsConfig</a></li><li><a href="module-OverviewMap-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom-pasteGeom.html">pasteGeom</a></li><li><a href="module-Permalink-Permalink.html">Permalink</a></li><li><a href="module-Popup-Popup.html">Popup</a></li><li><a href="module-PrintTemplate.PrintAtlasConfig.html">PrintAtlasConfig</a></li><li><a href="module-PrintTemplate.PrintLabelConfig.html">PrintLabelConfig</a></li><li><a href="module-PrintTemplate.PrintMapConfig.html">PrintMapConfig</a></li><li><a href="module-PrintTemplate.PrintTemplateConfig.html">PrintTemplateConfig</a></li><li><a href="module-Print-Print.html">Print</a></li><li><a href="module-ProxyEvents-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom-reverseGeom.html">reverseGeom</a></li><li><a href="module-Scaleline-Scaleline.html">Scaleline</a></li><li><a href="module-Search-Search.html">Search</a></li><li><a href="module-SelectionInvert-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping-Snapping.html">Snapping</a></li><li><a href="module-State.State.html">State</a></li><li><a href="module-State-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-State-SelectionTool.html">SelectionTool</a></li><li><a href="module-State-State.html">State</a></li><li><a href="module-SymbologyState.BaseIconSymbology.html">BaseIconSymbology</a></li><li><a href="module-SymbologyState.BaseObjectSymbology.html">BaseObjectSymbology</a></li><li><a href="module-SymbologyState.BaseSymbolsSymbology.html">BaseSymbolsSymbology</a></li><li><a href="module-SymbologyState.LayerGroupSymbology.html">LayerGroupSymbology</a></li><li><a href="module-SymbologyState.LayerIconSymbology.html">LayerIconSymbology</a></li><li><a href="module-SymbologyState.LayerSymbolsSymbology.html">LayerSymbolsSymbology</a></li><li><a href="module-SymbologyState.SymbolIconSymbology.html">SymbolIconSymbology</a></li><li><a href="module-SymbologyState.SymbolRuleSymbology.html">SymbolRuleSymbology</a></li><li><a href="module-Theme.LayerThemeConfig.html">LayerThemeConfig</a></li><li><a href="module-Theme.ThemeConfig.html">ThemeConfig</a></li><li><a href="module-Theme.ThemesConfig.html">ThemesConfig</a></li><li><a href="module-TimeManager.TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-TimeManager.TimeManagerLayersConfig.html">TimeManagerLayersConfig</a></li><li><a href="module-TimeManager-TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayerConfig.html">TooltipLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayersConfig.html">TooltipLayersConfig</a></li><li><a href="module-Treeview-Treeview.html">Treeview</a></li><li><a href="module-Utils-Utils.html">Utils</a></li><li><a href="module-WFS-WFS.html">WFS</a></li><li><a href="module-WMS-WMS.html">WMS</a></li><li><a href="module-maps-map.html">map</a></li></ul><h3>Events</h3><ul><li><a href="module-Action.html#~event:actionResultReceived">actionResultReceived</a></li><li><a href="global.html#event:beforetreecreated">beforetreecreated</a></li><li><a href="global.html#event:layersadded">layersadded</a></li><li><a href="global.html#event:mapcreated">mapcreated</a></li><li><a href="global.html#event:treecreated">treecreated</a></li></ul><h3>Global</h3><ul><li><a href="global.html#addListener">addListener</a></li><li><a href="global.html#dispatch">dispatch</a></li><li><a href="global.html#removeListener">removeListener</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.2</a> on Wed Feb 14 2024 14:50:29 GMT+0100 (Central European Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

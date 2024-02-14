@@ -1,0 +1,39 @@
+{
+  "name": "lizmap/lizmap-web-client",
+  "type": "project",
+  "description": "",
+  "license": "MPL-2.0",
+  "authors": [
+  ],
+  "require": {
+    "php": ">=7.4",
+    "jelix/jelix": "^1.8.6",
+    "jelix/composer-module-setup": "^1.1.0",
+    "jelix/jcommunity-module": "^1.4.3",
+    "jelix/ldapdao-module": "~2.2.4",
+    "proj4php/proj4php": "~2.0.0",
+    "violet/streaming-json-encoder": "^1.1.5",
+    "guzzlehttp/guzzle": "^7.7.0"
+  },
+  "require-dev": {
+    "gettext/gettext": "^4.6.1"
+  },
+  "minimum-stability": "stable",
+  "config": {
+    "preferred-install": {
+      "*": "dist"
+    },
+    "allow-plugins": {
+      "jelix/composer-module-setup": true
+    },
+    "platform": {
+      "php": "7.4"
+    }
+  },
+  "extra": {
+    "jelix": {
+      "app-dir" : "./",
+      "var-config-dir" : "var/config/"
+    }
+  }
+}

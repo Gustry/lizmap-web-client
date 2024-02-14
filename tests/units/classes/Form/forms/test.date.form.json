@@ -1,0 +1,25 @@
+{
+    "pkuid": {
+        "editAttr": {
+            "editable": 1,
+            "fieldAlias": ""
+        },
+        "fieldEditType": "TextEdit",
+        "markup": "input",
+        "rendererCategories": []
+    },
+    "customdate": {
+        "editAttr": {
+            "AllowNull": "true",
+            "calendar_popup": "true",
+            "display_format": "MM-d-yy",
+            "field_format": "MM-d-yy",
+            "field_iso_format": false,
+            "Editable": true,
+            "fieldAlias": ""
+        },
+        "fieldEditType": "DateTime",
+        "markup": "date",
+        "rendererCategories": []
+    }
+}

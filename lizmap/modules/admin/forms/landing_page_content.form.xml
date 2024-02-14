@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<form xmlns="http://jelix.org/ns/forms/1.1">
+
+    <htmleditor ref="HTMLContent" config="ckfullandmedia">
+        <label locale="admin~admin.landingPageContent.top"/>
+    </htmleditor>
+
+    <htmleditor ref="BottomHTMLContent" config="ckfullandmedia">
+        <label locale="admin~admin.landingPageContent.bottom"/>
+    </htmleditor>
+
+    <submit ref="_submit">
+        <label locale="admin~admin.form.admin_services.submit.label"/>
+    </submit>
+
+</form>

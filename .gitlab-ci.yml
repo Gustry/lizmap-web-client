@@ -1,0 +1,226 @@
+stages:
+- build
+- tests
+- package
+- docker-image
+- deploy
+- release
+- post-release
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - lizmap/vendor/
+    - assets/node_modules/
+
+build:
+  stage: build
+  script:
+    - make build
+  environment:
+    name: snap
+  artifacts:
+    name: "lizmap-web-client-${CI_COMMIT_SHA}-js"
+    paths:
+      - lizmap/www/assets/js/lizmap.js
+      - lizmap/www/assets/js/lizmap.js.map
+      - lizmap/www/assets/js/atlas.js
+      - lizmap/www/assets/js/atlas.js.map
+      - lizmap/www/assets/js/attributeTable.js
+      - lizmap/www/assets/js/attributeTable.js.map
+      - lizmap/www/assets/js/bottom-dock.js
+      - lizmap/www/assets/js/bottom-dock.js.map
+      - lizmap/www/assets/js/edition.js
+      - lizmap/www/assets/js/edition.js.map
+      - lizmap/www/assets/js/filter.js
+      - lizmap/www/assets/js/filter.js.map
+      - lizmap/www/assets/js/map.js
+      - lizmap/www/assets/js/map.js.map
+      - lizmap/www/assets/js/switcher-layers-actions.js
+      - lizmap/www/assets/js/switcher-layers-actions.js.map
+      - lizmap/www/assets/js/timemanager.js
+      - lizmap/www/assets/js/timemanager.js.map
+      - lizmap/www/assets/js/view.js
+      - lizmap/www/assets/js/view.js.map
+  tags:
+    - fabric
+
+tests:
+  stage: tests
+  script:
+    - make tests
+  environment:
+    name: snap
+  cache:
+    key: "tests-$CI_COMMIT_REF_SLUG"
+    paths:
+      - tests/units/vendor/
+      - tests/units/composer.lock
+  dependencies:
+    - build
+  tags:
+    - fabric
+
+package:
+  stage: package
+  script:
+    - make clean ci_package
+  environment:
+    name: snap
+  dependencies:
+    - build
+    - tests
+  artifacts:
+    name: "lizmap-web-client-${CI_COMMIT_SHA}"
+    paths:
+      - "build/*.zip"
+      - "build/MANIFEST"
+      - "build/*.manifest"
+  only:
+    - /^release_.*$/
+    - master
+    - tags
+  tags:
+    - fabric
+
+docker-image-unstable:
+  stage: docker-image
+  script:
+    - make docker-build-ci docker-deliver docker-clean
+    #- make docker-hub
+  environment:
+    name: snap
+  artifacts:
+    paths:
+      - docker/factory.manifest
+  dependencies:
+    - package
+  only:
+    - /^release_.*$/
+    - master
+  except:
+    - tags
+  tags:
+    - infrav3
+
+docker-image-release:
+  stage: docker-image
+  script:
+    - make docker-build-ci docker-deliver docker-clean-all DO_RELEASE=y
+  environment:
+    name: snap
+  artifacts:
+    paths:
+      - docker/factory.manifest
+  dependencies:
+    - package
+  only:
+    - tags
+  tags:
+    - infrav3
+
+deploy-package-unstable:
+  stage: deploy
+  script:
+    - make deploy_download
+    - make saas_deploy_snap
+  environment:
+    name: snap
+  dependencies:
+    - package
+  only:
+    - /^release_.*$/
+    - master
+  except:
+    - tags
+  tags:
+    - fabric
+
+deploy-docker-unstable:
+  stage: deploy
+  script:
+    - $FACTORY_SCRIPTS/update-service lizmap
+  environment:
+    name: snap
+  dependencies:
+    - docker-image-unstable
+  only:
+    - /^release_.*$/
+    - master
+  except:
+    - tags
+  tags:
+    - infrav3
+
+deploy-quick-release:
+  stage: release
+  script:
+    - make saas_release DO_RELEASE=y
+  environment:
+    name: production
+  dependencies:
+    - package
+  only:
+    - /^release_.*$/
+  tags:
+    - fabric
+  except:
+    - tags
+  when: manual
+
+
+deploy-release:
+  stage: release
+  script:
+    - make deploy_download_stable
+    - make saas_release DO_RELEASE=y
+  environment:
+    name: production
+  dependencies:
+    - package
+  tags:
+    - fabric
+  only:
+    - tags
+  when: manual
+
+docker-release:
+  stage: release
+  script:
+    - make docker-release
+  environment:
+    name: production
+  dependencies:
+    - docker-image-release
+  when: manual
+  only:
+    - tags
+  tags:
+    - infrav3
+
+tickets:
+  stage: release
+  only:
+    - tags
+  image:
+    name: $REGISTRY_URI/infra/ci-tools:latest
+  script:
+    - create_ticket.py
+  tags:
+    - factory-plain
+  variables:
+    FACTORY_PRODUCT_NAME: lizmap-web-client
+    FACTORY_PACKAGE_TYPE: application
+
+github_release:
+  stage: post-release
+  needs:
+    - job: deploy-release
+  only:
+    - tags
+  image:
+    name: $REGISTRY_URI/infra/ci-tools:latest
+  script:
+    - lwc_release.py
+  tags:
+    - factory-plain

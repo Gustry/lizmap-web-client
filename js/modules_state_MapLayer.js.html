@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: modules/state/MapLayer.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: modules/state/MapLayer.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @module state/MapLayer.js
+ * @name MapLayerState
+ * @copyright 2023 3Liz
+ * @author DHONT René-Luc
+ * @license MPL-2.0
+ */
+
+import EventDispatcher from './../../utils/EventDispatcher.js';
+import { createEnum } from './../utils/Enums.js';
+import { LayerConfig } from './../config/Layer.js';
+import { AttributionConfig } from './../config/Attribution.js'
+import { LayerStyleConfig, LayerGeographicBoundingBoxConfig, LayerBoundingBoxConfig } from './../config/LayerTree.js';
+import { LayerItemState, LayerGroupState, LayerLayerState, LayerVectorState, LayerRasterState } from './Layer.js';
+import { LayerSymbolsSymbology, LayerIconSymbology, LayerGroupSymbology } from './Symbology.js';
+
+/**
+ * Enum for map layer load status
+ * @readonly
+ * @enum {string}
+ * @property {string} Undefined - The map layer's load status is undefined (not yet loading, ready or error)
+ * @property {string} Loading   - The map layer is loading
+ * @property {string} Ready     - The map layer is ready
+ * @property {string} Error     - The map layer's load status is error (an error has been raised during loading)
+ * @see {@link https://openlayers.org/en/latest/apidoc/module-ol_source_Source.html#~State|OpenLayer Source State}
+ */
+export const MapLayerLoadStatus = createEnum({
+    'Undefined': 'undefined',
+    'Loading': 'loading',
+    'Ready': 'ready',
+    'Error': 'error',
+});
+
+/**
+ * Class representing a map item: could be a group or a layer
+ * @class
+ * @augments EventDispatcher
+ */
+export class MapItemState extends EventDispatcher {
+
+    /**
+     * Create a map item
+     * @param {string}         type             - the map layer item type
+     * @param {LayerItemState} layerItemState   - the layer item state
+     * @param {MapItemState}   [parentMapGroup] - the parent layer map group
+     */
+    constructor(type, layerItemState, parentMapGroup) {
+        super();
+        this._type = type
+        this._layerItemState = layerItemState;
+        this._parentMapGroup = null;
+        if (parentMapGroup instanceof MapItemState
+            &amp;&amp; parentMapGroup.type == 'group') {
+            this._parentMapGroup = parentMapGroup;
+        }
+        if (layerItemState instanceof LayerGroupState) {
+            layerItemState.addListener(
+                this.dispatch.bind(this),
+                layerItemState.mapType + '.visibility.changed'
+            );
+            layerItemState.addListener(
+                this.dispatch.bind(this),
+                layerItemState.mapType + '.symbology.changed'
+            );
+            layerItemState.addListener(
+                this.dispatch.bind(this),
+                layerItemState.mapType + '.opacity.changed'
+            );
+        } else {
+            layerItemState.addListener(this.dispatch.bind(this), 'layer.visibility.changed');
+            layerItemState.addListener(this.dispatch.bind(this), 'layer.symbology.changed');
+            layerItemState.addListener(this.dispatch.bind(this), 'layer.opacity.changed');
+            layerItemState.addListener(this.dispatch.bind(this), 'layer.style.changed');
+            layerItemState.addListener(this.dispatch.bind(this), 'layer.symbol.checked.changed');
+            layerItemState.addListener(this.dispatch.bind(this), 'layer.selection.changed');
+            layerItemState.addListener(this.dispatch.bind(this), 'layer.selection.token.changed');
+            layerItemState.addListener(this.dispatch.bind(this), 'layer.filter.changed');
+            layerItemState.addListener(this.dispatch.bind(this), 'layer.filter.token.changed');
+        }
+    }
+    /**
+     * Config layers
+     * @type {string}
+     */
+    get name() {
+        return this._layerItemState.name;
+    }
+
+    /**
+     * Config layers
+     * @type {string}
+     */
+    get type() {
+        return this._type;
+    }
+
+    /**
+     * the layer tree item level
+     * @type {number}
+     */
+    get level() {
+        return this._layerItemState.level;
+    }
+
+    /**
+     * WMS layer name
+     * @type {?string}
+     */
+    get wmsName() {
+        return this._layerItemState.wmsName;
+    }
+
+    /**
+     * WMS layer title
+     * @type {string}
+     */
+    get wmsTitle() {
+        return this._layerItemState.wmsTitle;
+    }
+
+    /**
+     * WMS layer Geographic Bounding Box
+     * @type {?LayerGeographicBoundingBoxConfig}
+     */
+    get wmsGeographicBoundingBox() {
+        return this._layerItemState.wmsGeographicBoundingBox;
+    }
+
+    /**
+     * WMS layer Bounding Boxes
+     * @type {LayerBoundingBoxConfig[]}
+     */
+    get wmsBoundingBoxes() {
+        return this._layerItemState.wmsBoundingBoxes;
+    }
+
+
+    /**
+     * WMS Minimum scale denominator
+     * If the minimum scale denominator is not defined: -1 is returned
+     * If the WMS layer is a group, the minimum scale denominator is -1 if only one layer
+     * minimum scale denominator is not defined else the smallest layer minimum scale denominator
+     * in the group
+     * @type {number}
+     */
+    get wmsMinScaleDenominator() {
+        return this._layerItemState.wmsMinScaleDenominator;
+    }
+
+    /**
+     * WMS layer maximum scale denominator
+     * If the maximum scale denominator is not defined: -1 is returned
+     * If the WMS layer is a group, the maximum scale denominator is the largest of the layers in the group
+     * @type {number}
+     */
+    get wmsMaxScaleDenominator() {
+        return this._layerItemState.wmsMaxScaleDenominator;
+    }
+
+    /**
+     * Layer tree item is checked
+     * @type {boolean}
+     */
+    get checked() {
+        return this._layerItemState.checked;
+    }
+
+    /**
+     * Set layer tree item is checked
+     * @type {boolean}
+     */
+    set checked(val) {
+        this._layerItemState.checked = val;
+    }
+
+    /**
+     * Layer tree item is visible
+     * It depends on the parent visibility
+     * @type {boolean}
+     */
+    get visibility() {
+        return this._layerItemState.visibility;
+    }
+
+    /**
+     * Layer tree item opacity
+     * @type {number}
+     */
+    get opacity() {
+        return this._layerItemState.opacity;
+    }
+
+    /**
+     * Set layer tree item opacity
+     * @type {number}
+     */
+    set opacity(val) {
+        this._layerItemState.opacity = val;
+    }
+
+    /**
+     * Lizmap layer config
+     * @type {?LayerConfig}
+     */
+    get layerConfig() {
+        return this._layerItemState.layerConfig;
+    }
+
+    /**
+     * Lizmap layer item state
+     * @type {?LayerConfig}
+     */
+    get itemState() {
+        return this._layerItemState;
+    }
+
+    /**
+     * Calculate and save visibility
+     * @returns {boolean} the calculated visibility
+     */
+    calculateVisibility() {
+        return this._layerItemState.calculateVisibility();
+    }
+}
+
+/**
+ * Class representing a map group state
+ * @class
+ * @augments MapItemState
+ */
+export class MapGroupState extends MapItemState {
+
+    /**
+     * Creating a map group state instance
+     * @param {LayerGroupState} layerGroupState  - the layer tree group config
+     * @param {MapGroupState}   [parentMapGroup] - the parent layer map group
+     */
+    constructor(layerGroupState, parentMapGroup) {
+        super('group', layerGroupState, parentMapGroup);
+
+        this._items = [];
+        this._notInLayerTree = [];
+        for (const layerItem of layerGroupState.getChildren()) {
+            // Group
+            if (layerItem instanceof LayerGroupState) {
+                // Hidden
+                if (layerItem.name.toLowerCase() == 'hidden') {
+                    continue;
+                }
+                // Overview
+                if (layerItem.name.toLowerCase() == 'overview' &amp;&amp; layerItem.level == 1) {
+                    continue;
+                }
+                // Baselayers
+                if (layerItem.name.toLowerCase() == 'baselayers' &amp;&amp; layerItem.level == 1) {
+                    continue;
+                }
+                // Empty Group
+                if (layerItem.childrenCount == 0) {
+                    continue;
+                }
+
+                if (!layerItem.groupAsLayer) {
+                    // Build group
+                    const group = new MapGroupState(layerItem, this);
+                    // Manage layer not display in layer tree
+                    if ( this._parentMapGroup != null) {
+                        // Merge them if we are not at the root level
+                        this._notInLayerTree = this._notInLayerTree.concat(...group._notInLayerTree);
+                    } else {
+                        // Insert them in items list at the root level
+                        this._items = this._items.concat(...group._notInLayerTree);
+                    }
+                    // If the group is empty do not keep it
+                    if (group.childrenCount == 0) {
+                        continue;
+                    }
+                    group.addListener(this.dispatch.bind(this), 'group.visibility.changed');
+                    group.addListener(this.dispatch.bind(this), 'group.symbology.changed');
+                    group.addListener(this.dispatch.bind(this), 'group.opacity.changed');
+                    group.addListener(this.dispatch.bind(this), 'layer.visibility.changed');
+                    group.addListener(this.dispatch.bind(this), 'layer.symbology.changed');
+                    group.addListener(this.dispatch.bind(this), 'layer.opacity.changed');
+                    group.addListener(this.dispatch.bind(this), 'layer.loading.changed');
+                    group.addListener(this.dispatch.bind(this), 'layer.load.status.changed');
+                    group.addListener(this.dispatch.bind(this), 'layer.style.changed');
+                    group.addListener(this.dispatch.bind(this), 'layer.symbol.checked.changed');
+                    group.addListener(this.dispatch.bind(this), 'layer.selection.changed');
+                    group.addListener(this.dispatch.bind(this), 'layer.selection.token.changed');
+                    group.addListener(this.dispatch.bind(this), 'layer.filter.changed');
+                    group.addListener(this.dispatch.bind(this), 'layer.filter.token.changed');
+                    this._items.push(group);
+                    // Group is checked if one child is checked
+                    if (group.checked) {
+                        this._checked = true;
+                    }
+                } else {
+                    // Build group as layer
+                    const layer = new MapLayerState(layerItem, this)
+                    layer.addListener(this.dispatch.bind(this), 'layer.visibility.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.symbology.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.opacity.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.loading.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.load.status.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.style.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.symbol.checked.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.selection.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.selection.token.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.filter.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.filter.token.changed');
+                    this._items.push(layer);
+                    // Group is checked if one child is checked
+                    if (layer.checked) {
+                        this._checked = true;
+                    }
+                }
+            } else if (layerItem instanceof LayerLayerState &amp;&amp; !layerItem.layerConfig.baseLayer) {
+                // layer with geometry type equal to 'none' or 'unknown' cannot be displayed
+                if (layerItem instanceof LayerVectorState
+                    &amp;&amp; !layerItem.isSpatial) {
+                    continue;
+                }
+                // layer not display in legend and not toggled has not to be displayed
+                if (!layerItem.displayInLegend &amp;&amp; !layerItem.layerConfig.toggled) {
+                    continue;
+                }
+                // Build layer
+                const layer = new MapLayerState(layerItem, this)
+                // Store layer not display in layer tree if we are not at the root level
+                if (!layerItem.displayInLegend &amp;&amp; this._parentMapGroup != null) {
+                    this._notInLayerTree.push(layer);
+                } else {
+                    this._items.push(layer);
+                    layer.addListener(this.dispatch.bind(this), 'layer.visibility.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.symbology.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.opacity.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.loading.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.load.status.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.style.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.symbol.checked.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.selection.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.selection.token.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.filter.changed');
+                    layer.addListener(this.dispatch.bind(this), 'layer.filter.token.changed');
+                    // Group is checked if one child is checked
+                    if (layer.checked) {
+                        this._checked = true;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * The layer mutually exclusive activation (group only)
+     * @type {boolean}
+     */
+    get mutuallyExclusive() {
+        if (this.layerConfig == null) {
+            return false;
+        }
+        return this.layerConfig.mutuallyExclusive;
+    }
+
+    /**
+     * Children items count
+     * @type {number}
+     */
+    get childrenCount() {
+        return this._items.length;
+    }
+
+    /**
+     * Children items
+     * @type {MapItemState[]}
+     */
+    get children() {
+        return [...this._items];
+    }
+
+    /**
+     * Iterate through children items
+     * @generator
+     * @yields {MapItemState} The next child item
+     */
+    *getChildren() {
+        for (const item of this._items) {
+            yield item;
+        }
+    }
+
+    /**
+     * Find layer names
+     * @returns {string[]} The layer names of all map layers
+     */
+    findMapLayerNames() {
+        let names = []
+        for(const item of this.getChildren()) {
+            if (item instanceof MapLayerState) {
+                names.push(item.name);
+            } else if (item instanceof MapGroupState) {
+                names = names.concat(item.findMapLayerNames());
+            }
+        }
+        return names;
+    }
+
+    /**
+     * Count map layers by exploding the layers within every "group as layer" groups.
+     * Used to get the actual total layers number for ordering purpose (i.e. assign correct zIndex value to each map layer)
+     * @returns {number} The exploded layers count
+     */
+    countExplodedMapLayers() {
+        let layersCount = 0;
+        for(const item of this.getChildren()) {
+            if (item instanceof MapLayerState) {
+                const itemState = item.itemState;
+                if(itemState instanceof LayerGroupState &amp;&amp; itemState.groupAsLayer){
+                    //count the layers inside the group
+                    layersCount += itemState.findLayers().length;
+                }
+                else if(itemState instanceof LayerLayerState){
+                    layersCount++;
+                }
+            } else if (item instanceof MapGroupState) {
+                layersCount += item.countExplodedMapLayers();
+            }
+        }
+
+        return layersCount;
+    }
+
+    /**
+     * Find layer items
+     * @returns {MapLayerState[]} The layer names of all map layers
+     */
+    findMapLayers() {
+        let items = []
+        for(const item of this.getChildren()) {
+            if (item instanceof MapLayerState) {
+                items.push(item);
+            } else if (item instanceof MapGroupState) {
+                items = items.concat(item.findMapLayers());
+            }
+        }
+        return items;
+    }
+
+    /**
+     * Find layer and group items
+     * @returns {Array&lt;MapLayerState|MapGroupState>} All map layers and map group states
+     */
+    findMapLayersAndGroups() {
+        let items = []
+        for(const item of this.getChildren()) {
+            if (item instanceof MapLayerState) {
+                items.push(item);
+            } else if (item instanceof MapGroupState) {
+                items.push(item);
+                items = items.concat(item.findMapLayersAndGroups());
+            }
+        }
+        return items;
+    }
+
+    /**
+     * Get layer item by its name
+     * @param {string} name - the layer name
+     * @returns {MapLayerState} The MapLayerState associated to the name
+     */
+    getMapLayerByName(name) {
+        for (const layer of this.findMapLayers()) {
+            if(layer.name === name) {
+                return layer;
+            }
+        }
+        throw RangeError('The layer name `'+ name +'` is unknown!');
+    }
+
+    /**
+     * Get layer or group item by its name
+     * @param {string} name - the layer or group name
+     * @returns {MapLayerState|MapGroupState} The MapLayerState or MapGroupState associated to the name
+     */
+    getMapLayerOrGroupByName(name) {
+        for (const item of this.findMapLayersAndGroups()) {
+            if(item.name === name) {
+                return item;
+            }
+        }
+        throw RangeError('The layer or group name `'+ name +'` is unknown!');
+    }
+}
+
+/**
+ * Class representing a map layer state
+ * @class
+ * @augments MapItemState
+ */
+export class MapLayerState extends MapItemState {
+
+    /**
+     * Creating a map layer state instance
+     * @param {LayerVectorState|LayerRasterState|LayerGroupState} layerItemState   - the layer item state
+     * @param {MapGroupState}                                     [parentMapGroup] - the parent layer map group
+     */
+    constructor(layerItemState, parentMapGroup) {
+        super('layer', layerItemState, parentMapGroup);
+        // The layer is group
+        if (this.itemState instanceof LayerGroupState) {
+            //layerItemState.addListener(this.dispatch.bind(this), 'layer.visibility.changed');
+            //layerItemState.addListener(this.dispatch.bind(this), 'layer.symbology.changed');
+            //layerItemState.addListener(this.dispatch.bind(this), 'layer.loading.changed');
+            //layerItemState.addListener(this.dispatch.bind(this), 'layer.style.changed');
+            //layerItemState.addListener(this.dispatch.bind(this), 'layer.symbol.checked.changed');
+            this.itemState.addListener(this.dispatch.bind(this), 'layer.selection.changed');
+            this.itemState.addListener(this.dispatch.bind(this), 'layer.selection.token.changed');
+            this.itemState.addListener(this.dispatch.bind(this), 'layer.filter.changed');
+            this.itemState.addListener(this.dispatch.bind(this), 'layer.filter.token.changed');
+        }
+        // set isLoading to false
+        this._loading = false;
+        this._loadStatus = MapLayerLoadStatus.Undefined;
+    }
+
+    /**
+     * Layer type
+     * @type {string}
+     */
+    get layerType() {
+        if (this.itemState instanceof LayerGroupState) {
+            return 'group';
+        }
+        return this._layerItemState.layerType;
+    }
+
+    /**
+     * Layer order from top to bottom
+     * @type {number}
+     */
+    get layerOrder() {
+        return this._layerItemState.layerOrder;
+    }
+
+    /**
+     * Is the map layer displayed in layer tree
+     * @type {boolean}
+     */
+    get displayInLayerTree() {
+        return this._layerItemState.displayInLegend;
+    }
+
+    /**
+     * Vector layer has selected features
+     * The selected features is not empty
+     * @type {boolean}
+     */
+    get hasSelectedFeatures() {
+        if (this._layerItemState instanceof LayerVectorState) {
+            return this._layerItemState.hasSelectedFeatures;
+        }
+        return false;
+    }
+
+    /**
+     * Vector layer is filtered
+     * The expression filter is not null
+     * @type {boolean}
+     */
+    get isFiltered() {
+        if (this._layerItemState instanceof LayerVectorState) {
+            return this._layerItemState.isFiltered;
+        }
+        return false;
+    }
+
+    /**
+     * WMS selected layer style name
+     * @type {string}
+     */
+    get wmsSelectedStyleName() {
+        return this._layerItemState.wmsSelectedStyleName;
+    }
+
+    /**
+     * Update WMS selected layer style name
+     * based on wmsStyles list
+     * @param {string} styleName - The WMS layer style name to select
+     */
+    set wmsSelectedStyleName(styleName) {
+        this._layerItemState.wmsSelectedStyleName = styleName;
+    }
+
+    /**
+     * WMS layer styles
+     * @type {LayerStyleConfig[]}
+     */
+    get wmsStyles() {
+        if ( this._layerItemState.type == 'layer' ) {
+            return this._layerItemState.wmsStyles;
+        }
+        return [new LayerStyleConfig('', '')];
+    }
+
+    /**
+     * WMS layer attribution
+     * @type {?AttributionConfig}
+     */
+    get wmsAttribution() {
+        if ( this._layerItemState.type == 'layer' ) {
+            return this._layerItemState.wmsAttribution;
+        }
+        return null;
+    }
+
+    /**
+     * Parameters for OGC WMS Request
+     * @type {object}
+     */
+    get wmsParameters() {
+        return this._layerItemState.wmsParameters;
+    }
+
+    /**
+     * Layer symbology
+     * @type {?(LayerIconSymbology|LayerSymbolsSymbology|LayerGroupSymbology)}
+     */
+    get symbology() {
+        return this._layerItemState.symbology;
+    }
+
+    /**
+     * Update layer symbology
+     * @param {(object | LayerIconSymbology | LayerSymbolsSymbology | LayerGroupSymbology)} node - The symbology node
+     */
+    set symbology(node) {
+        this._layerItemState.symbology = node;
+    }
+
+    /**
+     * The layer load status
+     * @see MapLayerLoadStatus
+     * @type {string}
+     */
+    get loadStatus() {
+        return this._loadStatus;
+    }
+
+
+    /**
+     * Set layer load status
+     * @see MapLayerLoadStatus
+     * @param {string} status - Expected values provided by the map layer load status enum
+     */
+    set loadStatus(status) {
+        const statusKeys = Object.keys(MapLayerLoadStatus).filter(key => MapLayerLoadStatus[key] === status);
+        if (statusKeys.length != 1) {
+            throw new TypeError('Unkonw status: `'+status+'`!');
+        }
+
+        // No changes
+        if (this._loadStatus == status) {
+            return;
+        }
+        // Set new value
+        this._loadStatus = status;
+
+        this.dispatch({
+            type: 'layer.load.status.changed',
+            name: this.name,
+            loadStatus: this.loadStatus,
+        })
+    }
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector.html">ActionSelector</a></li><li><a href="module-Atlas.html">Atlas</a></li><li><a href="module-AttributeTable.html">AttributeTable</a></li><li><a href="module-Attribution.html">Attribution</a></li><li><a href="module-BaseLayer.html">BaseLayer</a></li><li><a href="module-BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseObject.html">BaseObject</a></li><li><a href="module-BottomDock.html">BottomDock</a></li><li><a href="module-Config.html">Config</a></li><li><a href="module-Constants.html">Constants</a></li><li><a href="module-Converters.html">Converters</a></li><li><a href="module-Dataviz.html">Dataviz</a></li><li><a href="module-Digitizing.html">Digitizing</a></li><li><a href="module-Draw.html">Draw</a></li><li><a href="module-Edition.html">Edition</a></li><li><a href="module-Enums.html">Enums</a></li><li><a href="module-Errors.html">Errors</a></li><li><a href="module-Extent.html">Extent</a></li><li><a href="module-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-Filter.html">Filter</a></li><li><a href="module-FormFilter.html">FormFilter</a></li><li><a href="module-FullScreen.html">FullScreen</a></li><li><a href="module-Geolocation.html">Geolocation</a></li><li><a href="module-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Index.html">Index</a></li><li><a href="module-Layer.html">Layer</a></li><li><a href="module-LayerState.html">LayerState</a></li><li><a href="module-LayerTree.html">LayerTree</a></li><li><a href="module-LayerTreeState.html">LayerTreeState</a></li><li><a href="module-LayersOrder.html">LayersOrder</a></li><li><a href="module-Legend.html">Legend</a></li><li><a href="module-Locate.html">Locate</a></li><li><a href="module-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.html">MapState</a></li><li><a href="module-Mask.html">Mask</a></li><li><a href="module-Metadata.html">Metadata</a></li><li><a href="module-MousePosition.html">MousePosition</a></li><li><a href="module-Options.html">Options</a></li><li><a href="module-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom.html">PasteGeom</a></li><li><a href="module-Permalink.html">Permalink</a></li><li><a href="module-Popup.html">Popup</a></li><li><a href="module-Print.html">Print</a></li><li><a href="module-PrintTemplate.html">PrintTemplate</a></li><li><a href="module-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom.html">ReverseGeom</a></li><li><a href="module-Scaleline.html">Scaleline</a></li><li><a href="module-Search.html">Search</a></li><li><a href="module-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping.html">Snapping</a></li><li><a href="module-State.html">State</a></li><li><a href="module-Switch%2520layer%2520actions.html">Switch layer actions</a></li><li><a href="module-SymbologyAction.html">SymbologyAction</a></li><li><a href="module-SymbologyState.html">SymbologyState</a></li><li><a href="module-Theme.html">Theme</a></li><li><a href="module-Time%2520manager.html">Time manager</a></li><li><a href="module-TimeManager.html">TimeManager</a></li><li><a href="module-Tools.html">Tools</a></li><li><a href="module-Tooltip.html">Tooltip</a></li><li><a href="module-Treeview.html">Treeview</a></li><li><a href="module-Utils.html">Utils</a></li><li><a href="module-View.html">View</a></li><li><a href="module-WFS.html">WFS</a></li><li><a href="module-WMS.html">WMS</a></li><li><a href="module-maps.html">maps</a></li></ul><h3>Classes</h3><ul><li><a href="EventDispatcher.html">EventDispatcher</a></li><li><a href="module-Action.html">Action</a></li><li><a href="module-ActionSelector-ActionSelector.html">ActionSelector</a></li><li><a href="module-Action-Action.html">Action</a></li><li><a href="module-AttributeTable.AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-AttributeTable.AttributeLayersConfig.html">AttributeLayersConfig</a></li><li><a href="module-AttributeTable-AttributeLayerConfig.html">AttributeLayerConfig</a></li><li><a href="module-Attribution.AttributionConfig.html">AttributionConfig</a></li><li><a href="module-Attribution-AttributionConfig.html">AttributionConfig</a></li><li><a href="module-BaseLayer.BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseLayer.BaseLayersConfig.html">BaseLayersConfig</a></li><li><a href="module-BaseLayer.BingBaseLayerConfig.html">BingBaseLayerConfig</a></li><li><a href="module-BaseLayer.EmptyBaseLayerConfig.html">EmptyBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmsBaseLayerConfig.html">WmsBaseLayerConfig</a></li><li><a href="module-BaseLayer.WmtsBaseLayerConfig.html">WmtsBaseLayerConfig</a></li><li><a href="module-BaseLayer.XyzBaseLayerConfig.html">XyzBaseLayerConfig</a></li><li><a href="module-BaseLayerState.BaseLayerState.html">BaseLayerState</a></li><li><a href="module-BaseLayerState.BaseLayersState.html">BaseLayersState</a></li><li><a href="module-BaseLayerState.BingBaseLayerState.html">BingBaseLayerState</a></li><li><a href="module-BaseLayerState.EmptyBaseLayerState.html">EmptyBaseLayerState</a></li><li><a href="module-BaseLayerState.WmsBaseLayerState.html">WmsBaseLayerState</a></li><li><a href="module-BaseLayerState.WmtsBaseLayerState.html">WmtsBaseLayerState</a></li><li><a href="module-BaseLayerState.XyzBaseLayerState.html">XyzBaseLayerState</a></li><li><a href="module-BaseLayers-BaseLayers.html">BaseLayers</a></li><li><a href="module-BaseLayer-BaseLayerConfig.html">BaseLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectConfig.html">BaseObjectConfig</a></li><li><a href="module-BaseObject.BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-BaseObject.BaseObjectLayersConfig.html">BaseObjectLayersConfig</a></li><li><a href="module-BaseObject-BaseObjectLayerConfig.html">BaseObjectLayerConfig</a></li><li><a href="module-Config.Config.html">Config</a></li><li><a href="module-Config-Config.html">Config</a></li><li><a href="module-Dataviz.DatavizElementConfig.html">DatavizElementConfig</a></li><li><a href="module-Dataviz.DatavizLayersConfig.html">DatavizLayersConfig</a></li><li><a href="module-Dataviz.DatavizOptionsConfig.html">DatavizOptionsConfig</a></li><li><a href="module-Dataviz.DatavizPlotConfig.html">DatavizPlotConfig</a></li><li><a href="module-Dataviz.DatavizTraceConfig.html">DatavizTraceConfig</a></li><li><a href="module-Digitizing-Digitizing.html">Digitizing</a></li><li><a href="module-Draw-Draw.html">Draw</a></li><li><a href="module-Edition.EditionCapabilitiesConfig.html">EditionCapabilitiesConfig</a></li><li><a href="module-Edition.EditionLayerConfig.html">EditionLayerConfig</a></li><li><a href="module-Edition.EditionLayersConfig.html">EditionLayersConfig</a></li><li><a href="module-Edition-Edition.html">Edition</a></li><li><a href="module-Errors-ConversionError.html">ConversionError</a></li><li><a href="module-Errors-HttpError.html">HttpError</a></li><li><a href="module-Errors-PropertyRequiredError.html">PropertyRequiredError</a></li><li><a href="module-Errors-ValidationError.html">ValidationError</a></li><li><a href="module-Extent.Extent.html">Extent</a></li><li><a href="module-FeatureStorage-FeatureStorage.html">FeatureStorage</a></li><li><a href="module-FeatureToolbar-FeatureToolbar.html">FeatureToolbar</a></li><li><a href="module-FormFilter.FormFilterConfig.html">FormFilterConfig</a></li><li><a href="module-FormFilter.FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FormFilter-FormFilterElementConfig.html">FormFilterElementConfig</a></li><li><a href="module-FullScreen-FullScreen.html">FullScreen</a></li><li><a href="module-GeolocationSurvey-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-Geolocation-Geolocation.html">Geolocation</a></li><li><a href="module-Layer.LayerConfig.html">LayerConfig</a></li><li><a href="module-Layer.LayersConfig.html">LayersConfig</a></li><li><a href="module-LayerState.LayerGroupState.html">LayerGroupState</a></li><li><a href="module-LayerState.LayerItemState.html">LayerItemState</a></li><li><a href="module-LayerState.LayerLayerState.html">LayerLayerState</a></li><li><a href="module-LayerState.LayerRasterState.html">LayerRasterState</a></li><li><a href="module-LayerState.LayerVectorState.html">LayerVectorState</a></li><li><a href="module-LayerState.LayersAndGroupsCollection.html">LayersAndGroupsCollection</a></li><li><a href="module-LayerTree.LayerBoundingBoxConfig.html">LayerBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerGeographicBoundingBoxConfig.html">LayerGeographicBoundingBoxConfig</a></li><li><a href="module-LayerTree.LayerStyleConfig.html">LayerStyleConfig</a></li><li><a href="module-LayerTree.LayerTreeGroupConfig.html">LayerTreeGroupConfig</a></li><li><a href="module-LayerTree.LayerTreeItemConfig.html">LayerTreeItemConfig</a></li><li><a href="module-LayerTree.LayerTreeLayerConfig.html">LayerTreeLayerConfig</a></li><li><a href="module-LayerTreeState.LayerTreeGroupState.html">LayerTreeGroupState</a></li><li><a href="module-LayerTreeState.LayerTreeItemState.html">LayerTreeItemState</a></li><li><a href="module-LayerTreeState.LayerTreeLayerState.html">LayerTreeLayerState</a></li><li><a href="module-Legend-Legend.html">Legend</a></li><li><a href="module-Locate.LocateByLayerConfig.html">LocateByLayerConfig</a></li><li><a href="module-Locate.LocateLayerConfig.html">LocateLayerConfig</a></li><li><a href="module-MGRS-MGRS.html">MGRS</a></li><li><a href="module-MapLayerState.MapGroupState.html">MapGroupState</a></li><li><a href="module-MapLayerState.MapItemState.html">MapItemState</a></li><li><a href="module-MapLayerState.MapLayerState.html">MapLayerState</a></li><li><a href="module-MapState.MapState.html">MapState</a></li><li><a href="module-Mask-Mask.html">Mask</a></li><li><a href="module-Metadata.MetadataConfig.html">MetadataConfig</a></li><li><a href="module-MousePosition-MousePosition.html">MousePosition</a></li><li><a href="module-Options.OptionsConfig.html">OptionsConfig</a></li><li><a href="module-OverviewMap-OverviewMap.html">OverviewMap</a></li><li><a href="module-PasteGeom-pasteGeom.html">pasteGeom</a></li><li><a href="module-Permalink-Permalink.html">Permalink</a></li><li><a href="module-Popup-Popup.html">Popup</a></li><li><a href="module-PrintTemplate.PrintAtlasConfig.html">PrintAtlasConfig</a></li><li><a href="module-PrintTemplate.PrintLabelConfig.html">PrintLabelConfig</a></li><li><a href="module-PrintTemplate.PrintMapConfig.html">PrintMapConfig</a></li><li><a href="module-PrintTemplate.PrintTemplateConfig.html">PrintTemplateConfig</a></li><li><a href="module-Print-Print.html">Print</a></li><li><a href="module-ProxyEvents-ProxyEvents.html">ProxyEvents</a></li><li><a href="module-ReverseGeom-reverseGeom.html">reverseGeom</a></li><li><a href="module-Scaleline-Scaleline.html">Scaleline</a></li><li><a href="module-Search-Search.html">Search</a></li><li><a href="module-SelectionInvert-SelectionInvert.html">SelectionInvert</a></li><li><a href="module-SelectionTool-SelectionTool.html">SelectionTool</a></li><li><a href="module-Snapping-Snapping.html">Snapping</a></li><li><a href="module-State.State.html">State</a></li><li><a href="module-State-GeolocationSurvey.html">GeolocationSurvey</a></li><li><a href="module-State-SelectionTool.html">SelectionTool</a></li><li><a href="module-State-State.html">State</a></li><li><a href="module-SymbologyState.BaseIconSymbology.html">BaseIconSymbology</a></li><li><a href="module-SymbologyState.BaseObjectSymbology.html">BaseObjectSymbology</a></li><li><a href="module-SymbologyState.BaseSymbolsSymbology.html">BaseSymbolsSymbology</a></li><li><a href="module-SymbologyState.LayerGroupSymbology.html">LayerGroupSymbology</a></li><li><a href="module-SymbologyState.LayerIconSymbology.html">LayerIconSymbology</a></li><li><a href="module-SymbologyState.LayerSymbolsSymbology.html">LayerSymbolsSymbology</a></li><li><a href="module-SymbologyState.SymbolIconSymbology.html">SymbolIconSymbology</a></li><li><a href="module-SymbologyState.SymbolRuleSymbology.html">SymbolRuleSymbology</a></li><li><a href="module-Theme.LayerThemeConfig.html">LayerThemeConfig</a></li><li><a href="module-Theme.ThemeConfig.html">ThemeConfig</a></li><li><a href="module-Theme.ThemesConfig.html">ThemesConfig</a></li><li><a href="module-TimeManager.TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-TimeManager.TimeManagerLayersConfig.html">TimeManagerLayersConfig</a></li><li><a href="module-TimeManager-TimeManagerLayerConfig.html">TimeManagerLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayerConfig.html">TooltipLayerConfig</a></li><li><a href="module-Tooltip.TooltipLayersConfig.html">TooltipLayersConfig</a></li><li><a href="module-Treeview-Treeview.html">Treeview</a></li><li><a href="module-Utils-Utils.html">Utils</a></li><li><a href="module-WFS-WFS.html">WFS</a></li><li><a href="module-WMS-WMS.html">WMS</a></li><li><a href="module-maps-map.html">map</a></li></ul><h3>Events</h3><ul><li><a href="module-Action.html#~event:actionResultReceived">actionResultReceived</a></li><li><a href="global.html#event:beforetreecreated">beforetreecreated</a></li><li><a href="global.html#event:layersadded">layersadded</a></li><li><a href="global.html#event:mapcreated">mapcreated</a></li><li><a href="global.html#event:treecreated">treecreated</a></li></ul><h3>Global</h3><ul><li><a href="global.html#addListener">addListener</a></li><li><a href="global.html#dispatch">dispatch</a></li><li><a href="global.html#removeListener">removeListener</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.2</a> on Wed Feb 14 2024 14:50:29 GMT+0100 (Central European Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
