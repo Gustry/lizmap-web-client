@@ -5,9 +5,7 @@
         ],
         "exclude": [
             "assets/src/legacy/edition.js",
-            "assets/src/modules/Lizmap.js",
-            "assets/src/modules/Layers.js",
-            "assets/src/dependencies"
+            "assets/src/modules/Lizmap.js"
         ],
         "includePattern": ".+\\.js(doc|x)?$",
         "excludePattern": "(^|\\/|\\\\)_"
