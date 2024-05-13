@@ -21,7 +21,7 @@ function phi4z (eccent,e0,e1,e2,e3,a,b,c,phi) {
 		con3 = 2.0 * (a - ml) * (c * mlp - 2.0 / sin2ph) - 2.0 * mlp;
 		dphi = con1 / (con2 + con3);
 		phi += dphi;
-		if (Math.abs(dphi) <= .0000000001 ) return(phi);   
+		if (Math.abs(dphi) <= .0000000001 ) return(phi);
 	}
 	Proj4js.reportError("phi4z: No convergence");
 	return null;
@@ -44,7 +44,7 @@ function e4fn(x) {
 
 
 /*******************************************************************************
-NAME                             POLYCONIC 
+NAME                             POLYCONIC
 
 PURPOSE:	Transforms input longitude and latitude to Easting and
 		Northing for the Polyconic projection.  The
@@ -77,7 +77,7 @@ Proj4js.Proj.poly = {
 		/* Place parameters in static storage for common use
 		  -------------------------------------------------*/
 		this.temp = this.b / this.a;
-		this.es = 1.0 - Math.pow(this.temp,2);// devait etre dans tmerc.js mais n y est pas donc je commente sinon retour de valeurs nulles 
+		this.es = 1.0 - Math.pow(this.temp,2);// devait etre dans tmerc.js mais n y est pas donc je commente sinon retour de valeurs nulles
 		this.e = Math.sqrt(this.es);
 		this.e0 = Proj4js.common.e0fn(this.es);
 		this.e1 = Proj4js.common.e1fn(this.es);
@@ -107,7 +107,7 @@ Proj4js.Proj.poly = {
 			y = this.y0 - this.a * this.ml0;
 		} else {
 			sinphi = Math.sin(lat);
-			cosphi = Math.cos(lat);	   
+			cosphi = Math.cos(lat);	
 
 			ml = Proj4js.common.mlfn(this.e0, this.e1, this.e2, this.e3, lat);
 			ms = Proj4js.common.msfnz(this.e,sinphi,cosphi);
@@ -117,7 +117,7 @@ Proj4js.Proj.poly = {
 		}
 
 		p.x=x;
-		p.y=y;   
+		p.y=y;
 		return p;
 	},
 

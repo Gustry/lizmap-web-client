@@ -12,7 +12,7 @@ Richard Marsden         November 2009
 
 ALGORITHM REFERENCES
 
-1.  Snyder, John P., "Flattening the Earth - Two Thousand Years of Map 
+1.  Snyder, John P., "Flattening the Earth - Two Thousand Years of Map
     Projections", University of Chicago Press 1993
 
 2.  Wolfram Mathworld "Gnomonic Projection"
@@ -64,10 +64,10 @@ Proj4js.Proj.gnom = {
       Proj4js.reportError("orthoFwdPointError");
 
       // Point is in the opposing hemisphere and is unprojectable
-      // We still need to return a reasonable point, so we project 
-      // to infinity, on a bearing 
+      // We still need to return a reasonable point, so we project
+      // to infinity, on a bearing
       // equivalent to the northern hemisphere equivalent
-      // This is a reasonable approximation for short shapes and lines that 
+      // This is a reasonable approximation for short shapes and lines that
       // straddle the horizon.
 
       x = this.x0 + this.infinity_dist * cosphi * Math.sin(dlon);
@@ -107,7 +107,7 @@ Proj4js.Proj.gnom = {
       lat = this.phic0;
       lon = 0.0;
     }
- 
+
     p.x=lon;
     p.y=lat;
     return p;

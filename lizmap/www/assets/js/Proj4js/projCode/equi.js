@@ -1,5 +1,5 @@
 /*******************************************************************************
-NAME                             EQUIRECTANGULAR 
+NAME                             EQUIRECTANGULAR
 
 PURPOSE:	Transforms input longitude and latitude to Easting and
 		Northing for the Equirectangular projection.  The

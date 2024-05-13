@@ -30,7 +30,7 @@ ALGORITHM REFERENCES
 //static double m1;		               /* small value m			*/
 //static double false_northing = y0;   /* y offset in meters			*/
 //static double false_easting = x0;	   /* x offset in meters			*/
-//scale_fact = k0 
+//scale_fact = k0
 
 Proj4js.Proj.merc = {
   init : function() {
@@ -57,9 +57,9 @@ Proj4js.Proj.merc = {
     var lon = p.x;
     var lat = p.y;
     // convert to radians
-    if ( lat*Proj4js.common.R2D > 90.0 && 
-          lat*Proj4js.common.R2D < -90.0 && 
-          lon*Proj4js.common.R2D > 180.0 && 
+    if ( lat*Proj4js.common.R2D > 90.0 &&
+          lat*Proj4js.common.R2D < -90.0 &&
+          lon*Proj4js.common.R2D > 180.0 &&
           lon*Proj4js.common.R2D < -180.0) {
       Proj4js.reportError("merc:forward: llInputOutOfRange: "+ lon +" : " + lat);
       return null;
@@ -79,7 +79,7 @@ Proj4js.Proj.merc = {
         x = this.x0 + this.a * this.k0 * Proj4js.common.adjust_lon(lon - this.long0);
         y = this.y0 - this.a * this.k0 * Math.log(ts);
       }
-      p.x = x; 
+      p.x = x;
       p.y = y;
       return p;
     }

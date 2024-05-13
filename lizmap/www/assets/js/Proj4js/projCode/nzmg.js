@@ -201,7 +201,7 @@ Proj4js.Proj.nzmg = {
     }
 
     // 4. Calculate easting and northing
-    p.x = (z_im * this.a) + this.x0; 
+    p.x = (z_im * this.a) + this.x0;
     p.y = (z_re * this.a) + this.y0;
 
     return p;

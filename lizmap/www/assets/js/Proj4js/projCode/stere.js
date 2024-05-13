@@ -66,7 +66,7 @@ Proj4js.Proj.stere = {
   			break;
   		}
   	}
-  }, 
+  },
 
 // Stereographic forward equations--mapping lat,long to x,y
   forward: function(p) {
@@ -74,7 +74,7 @@ Proj4js.Proj.stere = {
     lon = Proj4js.common.adjust_lon(lon - this.long0);
     var lat = p.y;
     var x, y;
-    
+
     if (this.sphere) {
     	var  sinphi, cosphi, coslam, sinlam;
 
@@ -244,4 +244,4 @@ Proj4js.Proj.stere = {
     	}
     }
   }
-}; 
+};

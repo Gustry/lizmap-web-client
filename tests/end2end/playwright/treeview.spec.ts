@@ -32,7 +32,7 @@ test.describe('Treeview', () => {
 
     test('displays mutually exclusive group', async ({ page }) => {
         await expect(page.getByText('group with space in name and shortname defined')).toHaveCount(1);
-        
+
         await expect(page.locator('#node-quartiers')).toHaveClass('rounded-checkbox');
         await expect(page.locator('#node-shop_bakery_pg')).toHaveClass('rounded-checkbox');
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
-NAME                             ORTHOGRAPHIC 
+NAME                             ORTHOGRAPHIC
 
 PURPOSE:	Transforms input longitude and latitude to Easting and
 		Northing for the Orthographic projection.  The
@@ -89,7 +89,7 @@ Proj4js.Proj.ortho = {
 
     lon = this.long0;
     if (Math.abs(rh) <= Proj4js.common.EPSLN) {
-      lat = this.lat0; 
+      lat = this.lat0;
     }
     lat = Proj4js.common.asinz(cosz * this.sin_p14 + (p.y * sinz * this.cos_p14)/rh);
     con = Math.abs(this.lat0) - Proj4js.common.HALF_PI;

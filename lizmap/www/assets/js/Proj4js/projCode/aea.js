@@ -1,5 +1,5 @@
 /*******************************************************************************
-NAME                     ALBERS CONICAL EQUAL AREA 
+NAME                     ALBERS CONICAL EQUAL AREA
 
 PURPOSE:	Transforms input longitude and latitude to Easting and Northing
 		for the Albers Conical Equal Area projection.  The longitude
@@ -72,11 +72,11 @@ Proj4js.Proj.aea = {
 
     var qs = Proj4js.common.qsfnz(this.e3,this.sin_phi,this.cos_phi);
     var rh1 =this.a * Math.sqrt(this.c - this.ns0 * qs)/this.ns0;
-    var theta = this.ns0 * Proj4js.common.adjust_lon(lon - this.long0); 
+    var theta = this.ns0 * Proj4js.common.adjust_lon(lon - this.long0);
     var x = rh1 * Math.sin(theta) + this.x0;
     var y = this.rh - rh1 * Math.cos(theta) + this.y0;
 
-    p.x = x; 
+    p.x = x;
     p.y = y;
     return p;
   },
@@ -120,7 +120,7 @@ Proj4js.Proj.aea = {
     p.y = lat;
     return p;
   },
-  
+
 /* Function to compute phi1, the latitude for the inverse of the
    Albers Conical Equal-Area projection.
 -------------------------------------------*/
@@ -128,12 +128,12 @@ Proj4js.Proj.aea = {
     var sinphi, cosphi, con, com, dphi;
     var phi = Proj4js.common.asinz(.5 * qs);
     if (eccent < Proj4js.common.EPSLN) return phi;
-    
-    var eccnts = eccent * eccent; 
+
+    var eccnts = eccent * eccent;
     for (var i = 1; i <= 25; i++) {
         sinphi = Math.sin(phi);
         cosphi = Math.cos(phi);
-        con = eccent * sinphi; 
+        con = eccent * sinphi;
         com = 1.0 - con * con;
         dphi = .5 * com * com / cosphi * (qs / (1.0 - eccnts) - sinphi / com + .5 / eccent * Math.log((1.0 - con) / (1.0 + con)));
         phi = phi + dphi;
@@ -142,7 +142,7 @@ Proj4js.Proj.aea = {
     Proj4js.reportError("aea:phi1z:Convergence error");
     return null;
   }
-  
+
 };
 
 

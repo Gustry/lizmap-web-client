@@ -12,10 +12,10 @@
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -31,7 +31,7 @@
 		if (typeof settings == 'string') {
 			method = settings;
 			params = extraSettings;
-		} 
+		}
 
 		options = {	id:						'',
 					nameSpace:				'',
@@ -117,7 +117,7 @@
 					case 'insert':
 						markup(params);
 					break;
-					default: 
+					default:
 						$.error('Method ' +  method + ' does not exist on jQuery.markItUp');
 				}
 				return;
@@ -239,7 +239,7 @@
 							$(li).addClass('markItUpDropMenu').append(dropMenus(button.dropMenu));
 						}
 					}
-				}); 
+				});
 				levels.pop();
 				return ul;
 			}
@@ -323,10 +323,10 @@
 
 				block = openBlockWith + block + closeBlockWith;
 
-				return {	block:block, 
+				return {	block:block,
 							openBlockWith:openBlockWith,
-							openWith:openWith, 
-							replaceWith:replaceWith, 
+							openWith:openWith,
+							replaceWith:replaceWith,
 							placeHolder:placeHolder,
 							closeWith:closeWith,
 							closeBlockWith:closeBlockWith
@@ -338,13 +338,13 @@
 				var len, j, n, i;
 				hash = clicked = button;
 				get();
-				$.extend(hash, {	line:"", 
+				$.extend(hash, {	line:"",
 						 			root:options.root,
-									textarea:textarea, 
-									selection:(selection||''), 
+									textarea:textarea,
+									selection:(selection||''),
 									caretPosition:caretPosition,
-									ctrlKey:ctrlKey, 
-									shiftKey:shiftKey, 
+									ctrlKey:ctrlKey,
+									shiftKey:shiftKey,
 									altKey:altKey
 								}
 							);
@@ -417,7 +417,7 @@
 
 				// refresh preview if opened
 				if (previewWindow && options.previewAutoRefresh) {
-					refreshPreview(); 
+					refreshPreview();
 				}
 																									
 				// reinit keyevent
@@ -458,8 +458,8 @@
 					}
 					range = textarea.createTextRange();
 					range.collapse(true);
-					range.moveStart('character', start); 
-					range.moveEnd('character', len); 
+					range.moveStart('character', start);
+					range.moveEnd('character', len);
 					range.select();
 				} else if (textarea.setSelectionRange ){
 					textarea.setSelectionRange(start, start + len);
@@ -490,7 +490,7 @@
 					caretPosition = textarea.selectionStart;
 
 					selection = textarea.value.substring(caretPosition, textarea.selectionEnd);
-				} 
+				}
 				return selection;
 			}
 
@@ -524,7 +524,7 @@
 					previewWindow = iFrame = false;
 				}
 				if (!options.previewAutoRefresh) {
-					refreshPreview(); 
+					refreshPreview();
 				}
 				if (options.previewInWindow) {
 					previewWindow.focus();
@@ -540,7 +540,7 @@
 				var phtml;
 				var parsedData = $$.val();
 				if (options.previewParser && typeof options.previewParser === 'function') {
-					parsedData = options.previewParser(parsedData); 
+					parsedData = options.previewParser(parsedData);
 				}
 				if (options.previewHandler && typeof options.previewHandler === 'function') {
 					options.previewHandler(parsedData);
@@ -552,7 +552,7 @@
 						url: options.previewParserPath,
 						data: options.previewParserVar+'='+encodeURIComponent(parsedData),
 						success: function(data) {
-							writeInPreview( localize(data, 1) ); 
+							writeInPreview( localize(data, 1) );
 						}
 					});
 				} else {
@@ -587,7 +587,7 @@
 			}
 			
 			// set keys pressed
-			function keyPressed(e) { 
+			function keyPressed(e) {
 				shiftKey = e.shiftKey;
 				altKey = e.altKey;
 				ctrlKey = (!(e.altKey && e.ctrlKey)) ? (e.ctrlKey || e.metaKey) : false;
@@ -619,7 +619,7 @@
 					}
 					if (e.keyCode === 9) { // Tab key
 						if (shiftKey == true || ctrlKey == true || altKey == true) {
-							return false; 
+							return false;
 						}
 						if (caretOffset !== -1) {
 							get();

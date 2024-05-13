@@ -1,19 +1,19 @@
 /*******************************************************************************
 NAME                  LAMBERT AZIMUTHAL EQUAL-AREA
- 
+
 PURPOSE:	Transforms input longitude and latitude to Easting and
 		Northing for the Lambert Azimuthal Equal-Area projection.  The
 		longitude and latitude must be in radians.  The Easting
 		and Northing values will be returned in meters.
 
-PROGRAMMER              DATE            
-----------              ----           
-D. Steinwand, EROS      March, 1991   
+PROGRAMMER              DATE
+----------              ----
+D. Steinwand, EROS      March, 1991
 
 This function was adapted from the Lambert Azimuthal Equal Area projection
 code (FORTRAN) in the General Cartographic Transformation Package software
 which is available from the U.S. Geological Survey National Mapping Division.
- 
+
 ALGORITHM REFERENCES
 
 1.  "New Equal-Area Map Projections for Noncircular Regions", John P. Snyder,
@@ -47,7 +47,7 @@ Proj4js.Proj.laea = {
     }
     if (this.es > 0) {
       var sinphi;
-  
+
       this.qp = Proj4js.common.qsfnz(this.e, 1.0);
       this.mmf = .5 / (1. - this.es);
       this.apa = this.authset(this.es);
@@ -90,10 +90,10 @@ Proj4js.Proj.laea = {
     var lam=p.x;
     var phi=p.y;
     lam = Proj4js.common.adjust_lon(lam - this.long0);
-    
+
     if (this.sphere) {
         var coslam, cosphi, sinphi;
-      
+
         sinphi = Math.sin(phi);
         cosphi = Math.cos(phi);
         coslam = Math.cos(lam);
@@ -124,7 +124,7 @@ Proj4js.Proj.laea = {
         }
     } else {
         var coslam, sinlam, sinphi, q, sinb=0.0, cosb=0.0, b=0.0;
-      
+
         coslam = Math.cos(lam);
         sinlam = Math.sin(lam);
         sinphi = Math.sin(phi);
@@ -209,7 +209,7 @@ Proj4js.Proj.laea = {
 
     if (this.sphere) {
         var  cosz=0.0, rh, sinz=0.0;
-      
+
         rh = Math.sqrt(x*x + y*y);
         phi = rh * .5;
         if (phi > 1.) {
@@ -243,7 +243,7 @@ Proj4js.Proj.laea = {
         lam = (y == 0. && (this.mode == this.EQUIT || this.mode == this.OBLIQ)) ? 0. : Math.atan2(x, y);
     } else {
         var cCe, sCe, q, rho, ab=0.0;
-      
+
         switch (this.mode) {
           case this.EQUIT:
           case this.OBLIQ:
@@ -324,7 +324,7 @@ Proj4js.Proj.laea = {
     p.y = phi;
     return p;
   },//lamazInv()
-  
+
 /* determine latitude from authalic latitude */
   P00: .33333333333333333333,
   P01: .17222222222222222222,
@@ -332,7 +332,7 @@ Proj4js.Proj.laea = {
   P10: .06388888888888888888,
   P11: .06640211640211640211,
   P20: .01641501294219154443,
-  
+
   authset: function(es) {
     var t;
     var APA = new Array();
@@ -346,12 +346,12 @@ Proj4js.Proj.laea = {
     APA[2] = t * this.P20;
     return APA;
   },
-  
+
   authlat: function(beta, APA) {
     var t = beta+beta;
     return(beta + APA[0] * Math.sin(t) + APA[1] * Math.sin(t+t) + APA[2] * Math.sin(t+t+t));
   }
-  
+
 };
 
 

@@ -1,6 +1,6 @@
 
-body {  
-  font-family: Verdana, Arial, Sans; 
+body {
+  font-family: Verdana, Arial, Sans;
   font-size:0.8em;
   margin:0;
   background-color:#eff4f6;
@@ -19,7 +19,7 @@ h1.apptitle {
     padding: 0.5em;
     width: 600px;
     -moz-border-radius:5px;
-    -webkit-border-radius:5px; 
+    -webkit-border-radius:5px;
     -o-border-radius:5px;
     border-radius:5px ;
     z-index:100;
@@ -52,7 +52,7 @@ div.block h2 {
   -moz-border-radius:15px 15px 0px  0px ;
   -o-border-radius:15px 15px 0px  0px ;
   -webkit-border-top-right-radius: 15px;
-  -webkit-border-top-left-radius: 15px; 
+  -webkit-border-top-left-radius: 15px;
   border-radius:15px 15px 0px  0px ;
   -moz-box-shadow: #999 3px 3px 8px 0px;
   -webkit-box-shadow: #999 3px 3px 8px;
@@ -73,8 +73,8 @@ div.block .blockcontent {
   -o-box-shadow: #999 3px 3px 8px 0px;
   box-shadow: #999 3px 3px 8px 0px;
   -moz-border-radius:0px 0px 15px 15px;
-  -webkit-border-bottom-left-radius: 15px; 
-  -webkit-border-bottom-right-radius: 15px; 
+  -webkit-border-bottom-left-radius: 15px;
+  -webkit-border-bottom-right-radius: 15px;
   -o-border-radius:0px 0px 15px 15px;
   border-radius:0px 0px 15px 15px;
 }

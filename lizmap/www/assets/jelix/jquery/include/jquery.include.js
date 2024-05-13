@@ -96,7 +96,7 @@
                         return {
                                 filename: null,
                                 ext: null,
-                                tag:null 
+                                tag:null
                         }
                 },
                 //Check if the file that is been included already exist and return a Boolean value

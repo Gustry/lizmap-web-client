@@ -11,7 +11,7 @@ Proj4js.Proj.aeqd = {
     var ksp;
 
     var sinphi=Math.sin(p.y);
-    var cosphi=Math.cos(p.y); 
+    var cosphi=Math.cos(p.y);
     var dlon = Proj4js.common.adjust_lon(lon - this.long0);
     var coslon = Math.cos(dlon);
     var g = this.sin_p12 * sinphi + this.cos_p12 * cosphi * coslon;
@@ -71,5 +71,5 @@ Proj4js.Proj.aeqd = {
     p.x = lon;
     p.y = lat;
     return p;
-  } 
+  }
 };

@@ -1,5 +1,5 @@
 /*******************************************************************************
-NAME                            EQUIDISTANT CONIC 
+NAME                            EQUIDISTANT CONIC
 
 PURPOSE:	Transforms input longitude and latitude to Easting and Northing
 		for the Equidistant Conic projection.  The longitude and
@@ -56,7 +56,7 @@ Proj4js.Proj.eqdc = {
             //return(81);
        }
        this.sinphi=Math.sin(this.lat2);
-       this.cosphi=Math.cos(this.lat2);   
+       this.cosphi=Math.cos(this.lat2);
 
        this.ms2 = Proj4js.common.msfnz(this.e,this.sinphi,this.cosphi);
        this.ml2 = Proj4js.common.mlfn(this.e0, this.e1, this.e2, this.e3, this.lat2);
@@ -100,10 +100,10 @@ Proj4js.Proj.eqdc = {
     p.y  = this.rh - p.y + this.y0;
     var con, rh1;
     if (this.ns >= 0) {
-       rh1 = Math.sqrt(p.x *p.x + p.y * p.y); 
+       rh1 = Math.sqrt(p.x *p.x + p.y * p.y);
        con = 1.0;
     } else {
-       rh1 = -Math.sqrt(p.x *p. x +p. y * p.y); 
+       rh1 = -Math.sqrt(p.x *p. x +p. y * p.y);
        con = -1.0;
     }
     var theta = 0.0;
@@ -113,10 +113,10 @@ Proj4js.Proj.eqdc = {
     var lon = Proj4js.common.adjust_lon(this.long0 + theta / this.ns);
 
      p.x=lon;
-     p.y=lat;  
+     p.y=lat;
      return p;
     },
-    
+
 /* Function to compute latitude, phi3, for the inverse of the Equidistant
    Conic projection.
 -----------------------------------------------------------------*/
@@ -136,5 +136,5 @@ Proj4js.Proj.eqdc = {
     return null;
   }
 
-    
+
 };

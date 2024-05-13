@@ -12,7 +12,7 @@ following license agreement:
 
 This Agreement sets forth the terms and conditions under which
 the software known as OpenMap(tm) will be licensed by BBN
-Technologies ("BBN") to you ("Licensee"), and by which Derivative 
+Technologies ("BBN") to you ("Licensee"), and by which Derivative
 Works (as hereafter defined) of OpenMap will be licensed by you to BBN.
 
 Definitions:
@@ -237,7 +237,7 @@ if (window.Proj4js && !Proj4js.util) { Proj4js.util = {}; }
     function degToRad(deg) {
         return (deg * (Math.PI / 180.0));
     }
-    
+
     /**
      * Conversion from radians to degrees.
      *
@@ -248,7 +248,7 @@ if (window.Proj4js && !Proj4js.util) { Proj4js.util = {}; }
     function radToDeg(rad) {
         return (180.0 * (rad / Math.PI));
     }
-    
+
 	/**
      * Converts a set of Longitude and Latitude co-ordinates to UTM
      * using the WGS84 ellipsoid.
@@ -347,7 +347,7 @@ if (window.Proj4js && !Proj4js.util) { Proj4js.util = {}; }
             zoneLetter: getLetterDesignator(Lat)
         };
     }
-    
+
     /**
      * Converts UTM coords to lat/long, using the WGS84 ellipsoid. This is a convenience
      * class where the Zone can be specified as a single string eg."60N" which
@@ -429,7 +429,7 @@ if (window.Proj4js && !Proj4js.util) { Proj4js.util = {}; }
                 (D - (1 + 2 * T1 + C1) * D * D * D / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * eccPrimeSquared + 24 * T1 * T1)
                         * D * D * D * D * D / 120) / Math.cos(phi1Rad);
         lon = LongOrigin + radToDeg(lon);
-        
+
         var result;
         if (utm.accuracy) {
             var topRight = UTMtoLL({
@@ -452,7 +452,7 @@ if (window.Proj4js && !Proj4js.util) { Proj4js.util = {}; }
         }
         return result;
     }
-    
+
     /**
      * Calculates the MGRS letter designator for the given latitude.
      *
@@ -559,7 +559,7 @@ if (window.Proj4js && !Proj4js.util) { Proj4js.util = {}; }
 		
         return setParm;
     }
-    
+
    /**
      * Get the two-letter MGRS 100k designator given information
      * translated from the UTM northing, easting and zone number.
@@ -727,7 +727,7 @@ if (window.Proj4js && !Proj4js.util) { Proj4js.util = {}; }
 
         easting = sepEasting + east100k;
         northing = sepNorthing + north100k;
-        
+
         return {
             easting: easting,
             northing: northing,
@@ -907,7 +907,7 @@ if (window.Proj4js && !Proj4js.util) { Proj4js.util = {}; }
         }
 
     }
-    
+
     return {
         forward: forward,
         inverse: inverse
@@ -916,7 +916,7 @@ if (window.Proj4js && !Proj4js.util) { Proj4js.util = {}; }
 })();
 
 if (window.Proj4js && Proj4js.Point) {
-    
+
     /**
      * Creates a Proj4js.Point instance from a MGRS reference. The point will
      * reference the center of the MGRS reference, and coordinates will be in
@@ -933,7 +933,7 @@ if (window.Proj4js && Proj4js.Point) {
             (llbbox[3] + llbbox[1]) / 2
         );
     };
-    
+
     /**
      * Converts a Proj4js.Point instance to a MGRS reference. The point
      * coordinates are expected to be in WGS84 longitude and latitude.
@@ -941,10 +941,10 @@ if (window.Proj4js && Proj4js.Point) {
      * Only available if Proj4js is loaded.
      *
      * @param accuracy {int} The accuracy for the MGRS reference in digits (5
-     *     for 1 m, 4 for 10 m, 3 for 100 m, 4 for 1000 m or 5 for 10000 m) 
+     *     for 1 m, 4 for 10 m, 3 for 100 m, 4 for 1000 m or 5 for 10000 m)
      */
     Proj4js.Point.prototype.toMGRS = function(accuracy) {
         return Proj4js.util.MGRS.forward({lon: this.x, lat: this.y}, accuracy);
     };
-    
+
 }

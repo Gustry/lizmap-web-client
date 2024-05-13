@@ -6,14 +6,14 @@ PURPOSE:	Transforms input longitude and latitude to Easting and
 		longitude and latitude must be in radians.  The Easting
 		and Northing values will be returned in meters.
 
-PROGRAMMER              DATE            
-----------              ----           
-D. Steinwand, EROS      May, 1991     
+PROGRAMMER              DATE
+----------              ----
+D. Steinwand, EROS      May, 1991
 
-This function was adapted from the Sinusoidal projection code (FORTRAN) in the 
-General Cartographic Transformation Package software which is available from 
+This function was adapted from the Sinusoidal projection code (FORTRAN) in the
+General Cartographic Transformation Package software which is available from
 the U.S. Geological Survey National Mapping Division.
- 
+
 ALGORITHM REFERENCES
 
 1.  Snyder, John P., "Map Projections--A Working Manual", U.S. Geological
@@ -31,7 +31,7 @@ Proj4js.Proj.sinu = {
 	init: function() {
 		/* Place parameters in static storage for common use
 		  -------------------------------------------------*/
-		  
+		
 
 		if (!this.sphere) {
 		  this.en = Proj4js.common.pj_enfn(this.es);
@@ -42,7 +42,7 @@ Proj4js.Proj.sinu = {
       this.C_y = Math.sqrt((this.m + 1.) / this.n);
       this.C_x = this.C_y/(this.m + 1.);
     }
-		  
+		
 	},
 
 	/* Sinusoidal forward equations--mapping lat,long to x,y
@@ -70,7 +70,7 @@ Proj4js.Proj.sinu = {
       y = this.a * this.C_y * lat;
 
 		} else {
-		  
+		
 		  var s = Math.sin(lat);
 		  var c = Math.cos(lat);
       y = this.a * Proj4js.common.pj_mlfn(lat, s, c, this.en);
@@ -92,12 +92,12 @@ Proj4js.Proj.sinu = {
 		lat = p.y / this.a;
 		
 		if (this.sphere) {
-		  
+		
       p.y /= this.C_y;
       lat = this.m ? Math.asin((this.m * p.y + Math.sin(p.y)) / this.n) :
         ( this.n != 1. ? Math.asin(Math.sin(p.y) / this.n) : p.y );
       lon = p.x / (this.C_x * (this.m + Math.cos(p.y)));
-		  
+		
 		} else {
 		  lat = Proj4js.common.pj_inv_mlfn(p.y/this.a, this.es, this.en)
 		  var s = Math.abs(lat);
@@ -109,9 +109,9 @@ Proj4js.Proj.sinu = {
       } else if ((s - Proj4js.common.EPSLN) < Proj4js.common.HALF_PI) {
         lon = this.long0;
       }
-		  
+		
 		}
-		  
+		
 		p.x=lon;
 		p.y=lat;
 		return p;

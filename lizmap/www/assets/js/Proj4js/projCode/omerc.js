@@ -1,5 +1,5 @@
 /*******************************************************************************
-NAME                       OBLIQUE MERCATOR (HOTINE) 
+NAME                       OBLIQUE MERCATOR (HOTINE)
 
 PURPOSE:	Transforms input longitude and latitude to Easting and
 		Northing for the Oblique Mercator projection.  The
@@ -136,7 +136,7 @@ Proj4js.Proj.omerc = {
        this.cosgam=Math.cos(this.gam);
 
        this.sinaz=Math.sin(this.alpha);
-       this.cosaz=Math.cos(this.alpha);  
+       this.cosaz=Math.cos(this.alpha);
 
 
        if (this.lat0 >= 0) {

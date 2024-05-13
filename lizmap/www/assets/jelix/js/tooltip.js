@@ -14,7 +14,7 @@
  * 4.the end. test it ! :-)
  *
  * @version 1.1
- * @copyright 2004-2007 Laurent Jouanneau. 
+ * @copyright 2004-2007 Laurent Jouanneau.
  * @link http://ljouanneau.com/soft/javascript
  * @licence release under LGPL Licence
  */
