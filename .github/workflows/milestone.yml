@@ -47,6 +47,11 @@ jobs:
           route: PATCH /repos/${{ github.repository }}/issues/${{github.event.number}}
           pull_number: ${{github.event.number}}
           milestone: ${{ steps.milestone.outputs.milestone_number }}
-          body: >+
-            ${{ github.event.pull_request.body }}
+#          body: >+
+#            ${{ github.event.pull_request.body }}
           labels: ${{ steps.labels.outputs.labels }}
+
+      - uses: mshick/add-pr-comment@v2
+        if: ${{ steps.labels.outputs.sponsor }}
+        with:
+          message: ${{ steps.labels.outputs.sponsor }}
