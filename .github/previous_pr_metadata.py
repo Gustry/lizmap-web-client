@@ -60,8 +60,16 @@ if __name__ == "__main__":
         if not is_backport:
             raise Exception
 
+        print("Current PR :")
+        print(is_backport)
+        print(parent_ref)
+        print(description)
         is_sponsored, sponsor, labels = parent_metadata(token=token, repo=repo, ref=parent_ref)
         labels_str = ','.join(labels)
+        print("Parent PR :")
+        print(is_sponsored)
+        print(sponsor)
+        print(labels_str)
         if os.environ['GITHUB_OUTPUT']:
             with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
                 print(f'labels={labels_str}', file=fh)
