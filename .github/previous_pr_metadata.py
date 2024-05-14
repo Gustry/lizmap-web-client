@@ -41,6 +41,8 @@ def parent_metadata(token: str, repo: str, ref: str):
         if label.get('id') == '1933297134':
             is_sponsored = True
         labels.append(label.get("name"))
+
+    is_sponsored = True
     body = metadata.get('body')
     body = body.split('Funded by')
     if len(body) >= 2:
