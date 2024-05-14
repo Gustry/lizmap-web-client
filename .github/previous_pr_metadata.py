@@ -83,8 +83,8 @@ if __name__ == "__main__":
                 with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
                     print(f'sponsor={sponsor}', file=fh)
 
-                with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
-                    print(f'description={description}\n{sponsor}', file=fh)
+                # with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+                #     print(f'description={description}', file=fh)
 
     except Exception:
         with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
