@@ -15,6 +15,7 @@ def current_metadata(token: str, repo: str, ref: str) -> Tuple[bool, str, str]:
         }
     )
     metadata = r.json()
+    print(metadata)
     is_backport = metadata.get('title').startswith('[Backport') and metadata.get('user').get('login') == '3liz-bot'
     if not is_backport:
         return False, "", ""
@@ -57,6 +58,7 @@ if __name__ == "__main__":
         repo = os.getenv("GITHUB_REPOSITORY")
         github_ref = os.getenv("GITHUB_PR_REF")
         is_backport, parent_ref, description = current_metadata(token=token, repo=repo, ref=github_ref)
+        print("HERE")
         if not is_backport:
             raise Exception
 
