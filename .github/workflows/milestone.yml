@@ -47,5 +47,6 @@ jobs:
           route: PATCH /repos/${{ github.repository }}/issues/${{github.event.number}}
           pull_number: ${{github.event.number}}
           milestone: ${{ steps.milestone.outputs.milestone_number }}
-          body: ${{ steps.milestone.outputs.description }}
+          body: |
+            ${{ steps.milestone.outputs.description }}
           labels: ${{ steps.milestone.outputs.labels }}

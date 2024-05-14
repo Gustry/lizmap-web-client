@@ -70,7 +70,8 @@ if __name__ == "__main__":
         print(f"Parent ID : {parent_ref}")
         print(f"Desc : {description}")
         is_sponsored, sponsor, labels = parent_metadata(token=token, repo=repo, ref=parent_ref)
-        labels_str = ','.join(labels)
+        labels_str = ','.join([f'"{l}"' for l in labels])
+        labels_str = f"[{labels_str}]"
         print("Parent PR :")
         print(f"Is sponso : {is_sponsored}")
         print(f"Sponso : {sponsor}")
