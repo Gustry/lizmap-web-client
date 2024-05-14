@@ -51,7 +51,7 @@ jobs:
 #            ${{ github.event.pull_request.body }}
           labels: ${{ steps.labels.outputs.labels }}
 
-      - uses: mshick/add-pr-comment@v2
+      - uses: mshick/add-pr-comment@v2.8.2
         if: ${{ steps.labels.outputs.sponsor }}
         with:
           message: ${{ steps.labels.outputs.sponsor }}
