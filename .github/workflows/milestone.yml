@@ -48,6 +48,5 @@ jobs:
           pull_number: ${{github.event.number}}
           milestone: ${{ steps.milestone.outputs.milestone_number }}
           body: |
-            ${{ github.event.pull_request.body }}
-            ${{ steps.labels.outputs.sponsor }}
+            ${{ github.event.pull_request.body }} ${{ steps.labels.outputs.sponsor }}
           labels: ${{ steps.labels.outputs.labels }}
