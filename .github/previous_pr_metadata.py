@@ -5,6 +5,9 @@ import requests
 
 from typing import Optional, Tuple
 
+LOGIN = "3liz-bot"
+LOGIN = "Gustry"
+
 
 def current_metadata(token: str, repo: str, ref: str) -> Tuple[bool, str, str]:
     """ Get current PR metadata. """
@@ -16,7 +19,7 @@ def current_metadata(token: str, repo: str, ref: str) -> Tuple[bool, str, str]:
     )
     metadata = r.json()
     print(metadata)
-    is_backport = metadata.get('title').startswith('[Backport') and metadata.get('user').get('login') == '3liz-bot'
+    is_backport = metadata.get('title').startswith('[Backport') and metadata.get('user').get('login') == LOGIN
     if not is_backport:
         return False, "", ""
     body = metadata.get('body')
