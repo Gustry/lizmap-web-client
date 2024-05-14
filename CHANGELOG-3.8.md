@@ -1,4 +1,4 @@
-# Changelog Lizmap 3.8
+# Changelog Lizmap 3.9
 
 <!--
 Format from https://keepachangelog.com/en/1.0.0/
