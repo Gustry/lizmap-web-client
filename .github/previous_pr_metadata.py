@@ -38,16 +38,16 @@ def parent_metadata(token: str, repo: str, ref: str):
     )
     metadata = r.json()
     labels_info = metadata.get('labels')
-    is_sponsored = False
-    sponsor = ""
+    is_sponsored = True
+    sponsor = "DEFAULT"
     labels = []
     for label in labels_info:
         if label.get('id') == '1933297134':
             is_sponsored = True
         labels.append(label.get("name"))
 
-    is_sponsored = True
     body = metadata.get('body')
+    print(f"Body parent: {body}")
     body = body.split('Funded by')
     if len(body) >= 2:
         body = body[1].split('\n')
@@ -66,15 +66,15 @@ if __name__ == "__main__":
             raise Exception
 
         print("Current PR :")
-        print(is_backport)
-        print(parent_ref)
-        print(description)
+        print(f"IS backport : {is_backport}")
+        print(f"Parent ID : {parent_ref}")
+        print(f"Desc : {description}")
         is_sponsored, sponsor, labels = parent_metadata(token=token, repo=repo, ref=parent_ref)
         labels_str = ','.join(labels)
         print("Parent PR :")
-        print(is_sponsored)
-        print(sponsor)
-        print(labels_str)
+        print(f"Is sponso : {is_sponsored}")
+        print(f"Sponso : {sponsor}")
+        print(f"Labels : {labels_str}")
         if os.environ['GITHUB_OUTPUT']:
             with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
                 print(f'labels={labels_str}', file=fh)
