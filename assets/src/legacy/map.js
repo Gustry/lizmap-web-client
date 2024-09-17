@@ -205,6 +205,36 @@ window.lizMap = function() {
     }
 
     /**
+     * Display the loading error
+     * @param error
+     */
+    function displayLoadingError(error){
+        console.error(error);
+        const errorMsg = `
+            <p class="error-msg">${lizDict['startup.error']}
+            <br><a href="${globalThis['lizUrls'].basepath}">${lizDict['startup.goToProject']}</a></p>`;
+        document.getElementById('header').insertAdjacentHTML('afterend', errorMsg);
+    }
+
+    /**
+     * Stop the splash screen
+     * @param getFeatureInfo
+     */
+    function stopSplashScreen(getFeatureInfo){
+        $('body').css('cursor', 'auto');
+        $('#loading').dialog('close');
+
+        // Display getFeatureInfo if requested
+        if(getFeatureInfo){
+            displayGetFeatureInfo(getFeatureInfo,
+                {
+                    x: map.size.w / 2,
+                    y: map.size.h / 2
+                });
+        }
+    }
+
+    /**
      * PRIVATE function: cleanName
      * cleaning layerName for class and layer
      * @param aName
@@ -3650,38 +3680,47 @@ window.lizMap = function() {
 
             // Request config and capabilities in parallel
             Promise.allSettled([configRequest, keyValueConfigRequest, WMSRequest, WMTSRequest, WFSRequest, featureExtentRequest, getFeatureInfoRequest]).then(responses => {
-                // Raise an error when one those required requests fails
-                // Other requests can fail silently
-                const requiredRequests = [responses[0], responses[2], responses[3], responses[4]];
+                try {
+                    // Raise an error when one those required requests fails
+                    // Other requests can fail silently
+                    const requiredRequests = [responses[0], responses[2], responses[3], responses[4]];
 
-                for (const request of requiredRequests) {
-                    if (request.status === "rejected") {
-                        throw new Error(request.reason);
+                    for (const request of requiredRequests) {
+                        if (request.status === "rejected") {
+                            throw new Error(request.reason);
+                        }
                     }
-                }
 
-                // `config` is defined globally
-                config = responses[0].value;
-                keyValueConfig = responses[1].value;
-                const wmsCapaData = responses[2].value;
-                const wmtsCapaData = responses[3].value;
-                const wfsCapaData = responses[4].value;
-                let featuresExtent = responses[5].value?.features?.[0]?.bbox;
-                let startupFeatures = responses[5].value?.features;
+                    // `config` is defined globally
+                    config = responses[0].value;
+                    keyValueConfig = responses[1].value;
+                    const wmsCapaData = responses[2].value;
+                    const wmtsCapaData = responses[3].value;
+                    const wfsCapaData = responses[4].value;
+                    let featuresExtent = responses[5].value?.features?.[0]?.bbox;
+                    let startupFeatures = responses[5].value?.features;
 
-                if(featuresExtent){
-                    for (const feature of startupFeatures) {
-                        featuresExtent = extend(featuresExtent, feature.bbox);
+                    if(featuresExtent){
+                        for (const feature of startupFeatures) {
+                            featuresExtent = extend(featuresExtent, feature.bbox);
+                        }
                     }
-                }
 
-                self.events.triggerEvent("configsloaded", {
-                    initialConfig: config,
-                    wmsCapabilities: wmsCapaData,
-                    wmtsCapabilities: wmtsCapaData,
-                    wfsCapabilities: wfsCapaData,
-                    startupFeatures: responses[5].value,
+                    self.events.triggerEvent("configsloaded", {
+                        initialConfig: config,
+                        wmsCapabilities: wmsCapaData,
+                        wmtsCapabilities: wmtsCapaData,
+                        wfsCapabilities: wfsCapaData,
+                        startupFeatures: responses[5].value,
+                    });
+                }
+                catch((error) => {
+                    displayLoadingError(error);
+                })
+                .finally(() => {
+                    stopSplashScreen(getFeatureInfo);
                 });
+
 
                 getFeatureInfo = responses[6].value;
 
@@ -3911,27 +3950,7 @@ window.lizMap = function() {
                 updateContentSize();
 
                 self.events.triggerEvent("uicreated", self);
-            })
-                .catch((error) => {
-                    console.error(error);
-                    const errorMsg = `
-          <p class="error-msg">${lizDict['startup.error']}
-          <br><a href="${globalThis['lizUrls'].basepath}">${lizDict['startup.goToProject']}</a></p>`;
-                    document.getElementById('header').insertAdjacentHTML('afterend', errorMsg);
-                })
-                .finally(() => {
-                    $('body').css('cursor', 'auto');
-                    $('#loading').dialog('close');
-
-                    // Display getFeatureInfo if requested
-                    if(getFeatureInfo){
-                        displayGetFeatureInfo(getFeatureInfo,
-                            {
-                                x: map.size.w / 2,
-                                y: map.size.h / 2
-                            });
-                    }
-                });
+            });
         }
     };
     // initializing the lizMap events
