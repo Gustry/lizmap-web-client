@@ -45,15 +45,69 @@ class logsCtrl extends jController
         $conditions = jDao::createConditions();
         $detailNumber = $dao->countBy($conditions);
 
-        // Get last error log
-        $errorLog = \Lizmap\App\FileTools::tail(jApp::logPath('lizmap-admin.log'), 50);
+        // TODO REMOVE, just to try logs
+        jLog::log('A log in lizmapadmin', 'lizmapadmin');
+        jLog::log('A log in errors', 'error');
+        jLog::log('A log in warning', 'warning');
+        jLog::log('A log in notice', 'notice');
+        jLog::log('A log in default');
+
+        // Logs file for admin and error
+        $lizmapLogPath = jApp::logPath('lizmap-admin.log');
+        $errorLogPath = jApp::logPath('errors.log');
+
+        // Number of lines for logs
+        $maxLinesToFetch = 150;
+        $maxLinesTextArea = 30;
+        $minLinesTextArea = 10;
+
+        // Get last admin log
+        $lizmapLog = \Lizmap\App\FileTools::tail($lizmapLogPath, $maxLinesToFetch);
+        $lizmapLogTextArea = $minLinesTextArea;
+        $numberLines = substr_count($lizmapLog, "\n");
+        if ($numberLines < $minLinesTextArea) {
+            // Log file < 10
+            $lizmapLogTextArea = $minLinesTextArea;
+        } elseif ($numberLines >= $minLinesTextArea && $numberLines < $maxLinesTextArea) {
+            // 10 <= log file < 30
+            $lizmapLogTextArea = $numberLines;
+        } else {
+            // log file >= 30
+            $lizmapLogTextArea = $maxLinesTextArea;
+        }
+
+        $errorLogDisplay = \lizmap::getServices()->hideSensitiveProperties();
+        $errorLog = '';
+        $errorLogBaseName = '';
+        $errorLogTextArea = '';
+        if ($errorLogDisplay) {
+            // Get last error log
+            $errorLog = \Lizmap\App\FileTools::tail($errorLogPath, $maxLinesToFetch);
+            $numberLines = substr_count($errorLog, "\n");
+            if ($numberLines < $minLinesTextArea) {
+                // Log file < 10
+                $errorLogTextArea = $minLinesTextArea;
+            } elseif ($numberLines >= $minLinesTextArea && $numberLines < $maxLinesTextArea) {
+                // 10 <= log file < 30
+                $errorLogTextArea = $numberLines;
+            } else {
+                // log file >= 30
+                $errorLogTextArea = $maxLinesTextArea;
+            }
+        }
 
         // Display content via templates
         $tpl = new jTpl();
         $assign = array(
             'counterNumber' => $counterNumber,
             'detailNumber' => $detailNumber,
+            'lizmapLog' => $lizmapLog,
+            'lizmapLogBaseName' => basename($lizmapLogPath),
+            'lizmapLogTextArea' => $lizmapLogTextArea,
+            'errorLogDisplay' => $errorLogDisplay,
             'errorLog' => $errorLog,
+            'errorLogBaseName' => basename($errorLogPath),
+            'errorLogTextArea' => $errorLogTextArea,
         );
         $tpl->assign($assign);
         $rep->body->assign('MAIN', $tpl->fetch('logs_view'));
