@@ -46,6 +46,7 @@ to view the hidden columns data and when there is no data for these columns -->
                 <th>{@admin.project.list.column.inspection.file.time.label@}</th>
             {/if}
             <th>{@admin.project.list.column.crs.label@}</th>
+            <th>JS</th>
             {if $hasInspectionData}
                 <th>{@admin.project.list.column.invalid.layers.list.label@}</th>
                 <th>{@admin.project.list.column.project.qgis.log.label@}</th>
@@ -257,6 +258,9 @@ to view the hidden columns data and when there is no data for these columns -->
                 {$p['projection']|strip_tags|eschtml}
                 {/if}
             </td>
+
+            <!-- Custom JS -->
+            <td>{$p['countUserJs']}</td>
 
         {if $hasInspectionData}
             <!-- List of invalid layers -->

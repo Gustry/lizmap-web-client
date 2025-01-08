@@ -1,5 +1,7 @@
 <?php
 
+use Lizmap\Project\ProjectFilesFinder;
+
 /**
  * Construct a list of Lizmap projects.
  *
@@ -160,6 +162,10 @@ class project_listZone extends jZone
             $repository = basename($repository).'/';
         }
 
+        $fileFinder = new ProjectFilesFinder();
+        $allURLS = $fileFinder->listFileURLS($projectMetadata);
+        $countUserJs = count($allURLS['js']) + count($allURLS['mjs']);
+
         // Build the project properties table
         $projectItem = array(
             'id' => $projectMetadata->getId(),
@@ -178,6 +184,7 @@ class project_listZone extends jZone
             'folder_repository' => $repository,
             'cfg_warnings_count' => $projectMetadata->countProjectCfgWarnings(),
             'cfg_warnings' => $projectMetadata->projectCfgWarnings(),
+            'custom_javascript' => $countUserJs,
             'lizmap_web_client_target_version' => $projectMetadata->getLizmapWebClientTargetVersion(),
             // convert int to string orderable
             'lizmap_plugin_version' => $this->pluginIntVersionToSortableString($projectMetadata->getLizmapPluginVersion()),
