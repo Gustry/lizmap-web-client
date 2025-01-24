@@ -31,9 +31,9 @@ jobs:
       PLAYWRIGHT_LIST_PRINT_STEPS: true
       FORCE_COLOR: true
       # For testing only
-      PHP_VERSION: 8.4
-      LZMPOSTGISVERSION: 17-3
-      LZMQGSRVVERSION: 3.40
+      PHP_VERSION: '8.4'
+      LZMPOSTGISVERSION: '17-3'
+      LZMQGSRVVERSION: '3.40'
 
     steps:
 
@@ -86,10 +86,10 @@ jobs:
           env-file: tests/.env
 
        # For testing only
-      - name: Update projects
-        run: |
-          make upgrade-projects
-          git status
+#      - name: Update projects
+#        run: |
+#          make upgrade-projects
+#          git status
 
       - name: Install QGIS server plugins
         run: make build-plugins
