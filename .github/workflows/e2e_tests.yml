@@ -86,10 +86,10 @@ jobs:
           env-file: tests/.env
 
        # For testing only
-#      - name: Update projects
-#        run: |
-#          make upgrade-projects
-#          git status
+      - name: Update projects
+        run: |
+          make upgrade-projects
+          git status
 
       - name: Install QGIS server plugins
         run: make build-plugins
