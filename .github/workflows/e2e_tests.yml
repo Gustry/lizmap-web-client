@@ -32,8 +32,8 @@ jobs:
       FORCE_COLOR: true
       # For testing only
       PHP_VERSION: 8.4
-      # LZMPOSTGISVERSION: 16-3
-      # LZMQGSRVVERSION: 3.34
+      LZMPOSTGISVERSION: 17-3
+#      LZMQGSRVVERSION: 3.40
 
     steps:
 
