@@ -23,7 +23,7 @@ The Lizmap web application must be installed on the server.
 
 The Original Code is [3Liz](https://3liz.com) code.
 
-You can find help and news by subscribing to the mailing list: https://lists.osgeo.org/mailman/listinfo/lizmap.
+You can find help and news by subscribing to the [mailing list](https://lists.osgeo.org/mailman/listinfo/lizmap).
 
 ## Versions
 
