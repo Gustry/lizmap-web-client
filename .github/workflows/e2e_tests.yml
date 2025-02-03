@@ -192,6 +192,10 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
 
+      - name: Install Playwright-CTRF
+        run: |
+          npm install --no-save playwright-ctrf-json-reporter
+
       - name: Run Playwright tests read-only
         id: test-playwright-read-only
         working-directory: tests/end2end
@@ -199,6 +203,22 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_NAME: tests-results-readonly.json
         run: |
           npx playwright test --grep @readonly --project=end2end
+
+      - name: Publish test report
+        uses: ctrf-io/github-test-reporter@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          report-path: './tests/end2end/ctrf/*.json'
+          summary-report: true
+          pull-request-report: true
+          summary: true
+          pull-request: true
+          title: ${{ env.NAME }}
+          annotate: false
+          overwrite-comment: true
+          comment-tag: '${{ github.workflow }}-${{ github.job }}'
+        if: always()
 
       - name: Prepare the database diff from Playwright read only
         run: |
