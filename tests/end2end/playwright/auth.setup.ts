@@ -15,7 +15,7 @@ export async function auth_using_login(page: Page, login: string, password: stri
   await page.goto('admin.php/auth/login?auth_url_return=%2Findex.php');
 
   let loginField = page.locator('#jforms_jcommunity_login_auth_login');
-  await expect(loginField, `The login field was not found in ${page.content()}`).toBeVisible();
+  await expect(loginField, `The login field was not found in the page`).toBeVisible();
   await loginField.fill(login);
 
   await page.locator('#jforms_jcommunity_login_auth_password').fill(password);

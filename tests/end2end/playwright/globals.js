@@ -98,7 +98,8 @@ export async function gotoMap(url, page, mapMustLoad = true, layersInTreeView = 
 
     // Wait for WMS GetCapabilities promise
     let getCapabilitiesWMSPromise = page.waitForRequest(/SERVICE=WMS&REQUEST=GetCapabilities/);
-    await page.goto(url);
+    const response = await page.goto(url);
+    await expect(response?.status()).toBe(200)
 
     // Wait for WMS GetCapabilities
     await getCapabilitiesWMSPromise;
@@ -132,7 +133,8 @@ export async function reloadMap(page, check = true) {
 
     // Wait for WMS GetCapabilities promise
     let getCapabilitiesWMSPromise = page.waitForRequest(/SERVICE=WMS&REQUEST=GetCapabilities/);
-    await page.reload();
+    const response = await page.reload();
+    await expect(response?.status()).toBe(200)
 
     // Wait for WMS GetCapabilities
     await getCapabilitiesWMSPromise;
@@ -170,7 +172,7 @@ export async function editedFeatureIds(page) {
  * @returns {Promise<URLSearchParams>} List of parameters in the request
  */
 export async function getEchoRequestParams(page, url) {
-    // Re-send the request with additionnal echo param to retrieve the OGC Request
+    // Re-send the request with additional echo param to retrieve the OGC Request
     let echoResponse = await page.request.get(url + '&__echo__');
     const originalUrl = decodeURIComponent(await echoResponse.text());
     // When the request has not been logged by echo proxy
