@@ -109,10 +109,11 @@ jobs:
        # For testing only
       - name: Update all QGIS projects to QGIS Desktop ${{ matrix.qgis-server }} by opening them and rewriting them
         if: |
-          ${{ matrix.update-projects == 'TRUE' }}
+          matrix.update-projects == 'TRUE'
         run: |
           make upgrade-projects
           git status
+          # git diff qgis-projects/tests/
 
       - name: Install QGIS server plugins
         run: make build-plugins
