@@ -212,7 +212,7 @@ jobs:
       - name: Prepare the database diff from Playwright "@readonly" tests
         if: |
           success() ||
-          steps.test-playwright-read-only.conclusion == 'failure'
+          steps.test-playwright-read-only.outcome != 'success'
         run: |
           ./lizmap-ctl dump-pgsql
           git diff --exit-code qgis-projects/tests/tests_dataset.sql
@@ -231,7 +231,7 @@ jobs:
       - name: Upload DB results
         if: |
           success() ||
-          steps.test-playwright-read-only.conclusion == 'failure'
+          steps.test-playwright-read-only.outcome != 'success'
         uses: actions/upload-artifact@v4.6.0
         with:
           name: ${{ matrix.name }}-DB-diff-read-only
@@ -242,7 +242,7 @@ jobs:
       - name: Check about updated files after read only tests
         if: |
           success() ||
-          steps.test-playwright-read-only.conclusion == 'failure'
+          steps.test-playwright-read-only.outcome != 'success'
         run: |
           if [[ -z $(git status --porcelain -uno) ]]; then
               echo "No updated files 👍"
@@ -260,7 +260,7 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_NAME: tests-results-no-tag.json
         if: |
           success() ||
-          steps.test-playwright-read-only.conclusion == 'failure'
+          steps.test-playwright-read-only.outcome != 'success'
         run: |
           npx playwright test --workers 1 --grep-invert "(?=.*@write|.*@readonly)" ${{ env.PLAYWRIGHT_OPTIONS }}
 
@@ -272,16 +272,16 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_NAME: tests-results-write.json
         if: |
           success() ||
-          steps.test-playwright-read-only.conclusion == 'failure' ||
-          steps.test-playwright-no-tag.conclusion == 'failure'
+          steps.test-playwright-read-only.outcome != 'success' ||
+          steps.test-playwright-no-tag.outcome != 'success'
         run: |
           npx playwright test --workers 1 --grep @write ${{ env.PLAYWRIGHT_OPTIONS }}
 
       - name: Send screenshots if necessary about all Playwright tests, if one failed
         if: |
-          steps.test-playwright-read-only.conclusion == 'failure' ||
-          steps.test-playwright-no-tag.conclusion == 'failure' ||
-          steps.test-playwright-write.conclusion == 'failure'
+          steps.test-playwright-read-only.outcome != 'success' ||
+          steps.test-playwright-no-tag.outcome != 'success' ||
+          steps.test-playwright-write.outcome != 'success'
         uses: actions/upload-artifact@v4.6.0
         with:
           name: ${{ matrix.name }}-screenshots-readonly
@@ -292,9 +292,9 @@ jobs:
       - name: Publish test report
         if: |
           success() ||
-          steps.test-playwright-read-only.conclusion == 'failure' ||
-          steps.test-playwright-no-tag.conclusion == 'failure' ||
-          steps.test-playwright-write.conclusion == 'failure'
+          steps.test-playwright-read-only.outcome != 'success' ||
+          steps.test-playwright-no-tag.outcome != 'success' ||
+          steps.test-playwright-write.outcome != 'success'
         uses: ctrf-io/github-test-reporter@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -334,9 +334,9 @@ jobs:
       - name: Upload test results
         if: |
           success() ||
-          steps.test-playwright-read-only.conclusion == 'failure' ||
-          steps.test-playwright-no-tag.conclusion == 'failure' ||
-          steps.test-playwright-write.conclusion == 'failure'
+          steps.test-playwright-read-only.outcome != 'success' ||
+          steps.test-playwright-no-tag.outcome != 'success' ||
+          steps.test-playwright-write.outcome != 'success'
         uses: actions/upload-artifact@v4.6.0
         with:
           if-no-files-found: 'ignore'
@@ -347,9 +347,9 @@ jobs:
         id: test-cypress
         if: |
           success() ||
-          steps.test-playwright-read-only.conclusion == 'failure' ||
-          steps.test-playwright-no-tag.conclusion == 'failure' ||
-          steps.test-playwright-write.conclusion == 'failure'
+          steps.test-playwright-read-only.outcome != 'success' ||
+          steps.test-playwright-no-tag.outcome != 'success' ||
+          steps.test-playwright-write.outcome != 'success'
         uses: cypress-io/github-action@v6.7.10
         with:
           install: false

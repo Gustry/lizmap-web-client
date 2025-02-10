@@ -106,15 +106,17 @@ export async function gotoMap(url, page, mapMustLoad = true, layersInTreeView = 
         intervals: [1_000, 2_000, 10_000],
         timeout: 60_000
     });
-    const response = await page.goto(url);
-    await expect(response?.status()).toBe(200)
 
     // Wait for WMS GetCapabilities
     await getCapabilitiesWMSPromise;
     if (mapMustLoad) {
         if (waitForGetLegendGraphic) {
             // Wait for WMS GetLegendGraphic promise
-            const getLegendGraphicPromise = page.waitForRequest(request => request.method() === 'POST' && request.postData() != null && request.postData()?.includes('GetLegendGraphic') === true);
+            const getLegendGraphicPromise = page.waitForRequest(
+                request => request.method() === 'POST' &&
+                    request.postData() != null &&
+                    request.postData()?.includes('GetLegendGraphic') === true
+            );
             // Normal check about the map
             // Wait for WMS GetLegendGraphic
             await getLegendGraphicPromise;
@@ -154,7 +156,12 @@ export async function reloadMap(page, check = true) {
     await getCapabilitiesWMSPromise;
     if (check) {
         // Wait for WMS GetLegendGraphic promise
-        const getLegendGraphicPromise = page.waitForRequest(request => request.method() === 'POST' && request.postData() != null && request.postData()?.includes('GetLegendGraphic') === true);
+        const getLegendGraphicPromise = page.waitForRequest(
+            request =>
+                request.method() === 'POST' &&
+                request.postData() != null &&
+                request.postData()?.includes('GetLegendGraphic') === true
+        );
         // Normal check about the map
         // Wait for WMS GetLegendGraphic
         await getLegendGraphicPromise;
