@@ -98,6 +98,14 @@ export async function gotoMap(url, page, mapMustLoad = true, layersInTreeView = 
 
     // Wait for WMS GetCapabilities promise
     let getCapabilitiesWMSPromise = page.waitForRequest(/SERVICE=WMS&REQUEST=GetCapabilities/);
+
+    await expect(async () => {
+        const response = await page.goto(url);
+        expect(response.status()).toBe(200);
+    }).toPass({
+        intervals: [1_000, 2_000, 10_000],
+        timeout: 60_000
+    });
     const response = await page.goto(url);
     await expect(response?.status()).toBe(200)
 
@@ -133,8 +141,14 @@ export async function reloadMap(page, check = true) {
 
     // Wait for WMS GetCapabilities promise
     let getCapabilitiesWMSPromise = page.waitForRequest(/SERVICE=WMS&REQUEST=GetCapabilities/);
-    const response = await page.reload();
-    await expect(response?.status()).toBe(200)
+
+    await expect(async () => {
+        const response = await page.reload();
+        expect(response.status()).toBe(200);
+    }).toPass({
+        intervals: [1_000, 2_000, 10_000],
+        timeout: 60_000
+    });
 
     // Wait for WMS GetCapabilities
     await getCapabilitiesWMSPromise;

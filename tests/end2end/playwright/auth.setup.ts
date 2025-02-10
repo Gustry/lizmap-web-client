@@ -11,8 +11,13 @@ import { Page } from '@playwright/test';
  * @param {string} user_file The path to the file where the cookies will be stored
  */
 export async function auth_using_login(page: Page, login: string, password: string, user_file: string) {
-  // Perform authentication steps. Replace these actions with your own.
-  await page.goto('admin.php/auth/login?auth_url_return=%2Findex.php');
+  await expect(async () => {
+    const response = await page.request.get('admin.php/auth/login?auth_url_return=%2Findex.php');
+    expect(response.status()).toBe(200);
+  }).toPass({
+    intervals: [1_000, 2_000, 10_000],
+    timeout: 60_000
+  });
 
   let loginField = page.locator('#jforms_jcommunity_login_auth_login');
   await expect(loginField, `The login field was not found in the page`).toBeVisible();

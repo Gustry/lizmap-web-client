@@ -108,7 +108,8 @@ jobs:
 
        # For testing only
       - name: Update all QGIS projects to QGIS Desktop ${{ matrix.qgis-server }} by opening them and rewriting them
-        if: ${{ matrix.update-projects == 'TRUE' }}
+        if: |
+          ${{ matrix.update-projects == 'TRUE' }}
         run: |
           make upgrade-projects
           git status
@@ -256,7 +257,9 @@ jobs:
         env:
           CRTF_JSON_FILE: playwright-no-tag
           PLAYWRIGHT_JSON_OUTPUT_NAME: tests-results-no-tag.json
-        if: success() || steps.test-playwright-read-only.conclusion == 'failure'
+        if: |
+          success() ||
+          steps.test-playwright-read-only.conclusion == 'failure'
         run: |
           npx playwright test --workers 1 --grep-invert "(?=.*@write|.*@readonly)" ${{ env.PLAYWRIGHT_OPTIONS }}
 
@@ -273,7 +276,7 @@ jobs:
         run: |
           npx playwright test --workers 1 --grep @write ${{ env.PLAYWRIGHT_OPTIONS }}
 
-      - name: Send screenshots if necessary about all tests
+      - name: Send screenshots if necessary about all Playwright tests, if one failed
         if: |
           steps.test-playwright-read-only.conclusion == 'failure' ||
           steps.test-playwright-no-tag.conclusion == 'failure' ||
